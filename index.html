@@ -499,10 +499,59 @@ function calcAge(dateValue) {
 }
 
 function getSLA(row) {
+    // If we have a calculated SLA status, use it
+    if (row._calculatedSLA) {
+        return row._calculatedSLA;
+    }
+    
+    // Otherwise, try to read from the Excel column
     if (!columnMappings.slaStatus) return 'Unknown';
     const value = row[columnMappings.slaStatus];
     if (!value || value === '') return 'Unknown';
     return String(value).trim();
+}
+
+function calculateSLA(row) {
+    // Calculate SLA status based on Excel formulas
+    // Logic: IF (Client Hold) THEN "SLA MET" ELSE IF (Age > Target) THEN "SLA BREACHED" ELSE "SLA MET"
+    
+    const ageHours = row._ageToUse; // Age in hours
+    
+    // Check for SLA Target
+    let slaTarget = null;
+    if (columnMappings.slaTarget && row[columnMappings.slaTarget]) {
+        slaTarget = parseFloat(row[columnMappings.slaTarget]);
+    }
+    
+    // Check for breach exception (Client Hold)
+    let hasException = false;
+    
+    // Check Status_Reason for "Client Hold"
+    if (columnMappings.statusReason && row[columnMappings.statusReason]) {
+        const reason = String(row[columnMappings.statusReason]).toLowerCase();
+        if (reason.includes('client hold') || reason.includes('pending')) {
+            hasException = true;
+        }
+    }
+    
+    // Check Breach Exception column
+    if (columnMappings.breachException && row[columnMappings.breachException]) {
+        const exception = String(row[columnMappings.breachException]).toUpperCase();
+        if (exception === 'YES') {
+            hasException = true;
+        }
+    }
+    
+    // Calculate SLA Status
+    if (hasException) {
+        return 'SLA MET';
+    } else if (slaTarget && ageHours > slaTarget) {
+        return 'SLA BREACHED';
+    } else if (slaTarget && ageHours > (slaTarget * 0.75)) {
+        return 'AT RISK'; // 75% of SLA consumed
+    } else {
+        return 'SLA MET';
+    }
 }
 
 function detectColumns(data) {
@@ -535,12 +584,14 @@ function detectColumns(data) {
         service: find(['service', 'service name', 'service type']),
         assignedGroup: find(['service group name', 'service group', 'assigned group', 'group', 'team', 'assignee']),
         impact: find(['impact']),
-        slaStatus: find(['sla status', 'sla']),
+        slaStatus: find(['sla status', 'slm real time status']),
+        slaTarget: find(['sla target']),
         age: find(['age', 'hrs round off', 'ticket age']),
         statusReason: find(['status_reason', 'status reason', 'status_reason_hidden']),
         submitDate: find(['submit date', 'submitted date', 'created date', 'reported date']),
         incidentId: find(['incident id', 'incident number', 'ticket id']),
-        company: find(['company', 'company name', 'customer', 'customer name', 'organization', 'org name'])
+        company: find(['company', 'company name', 'customer', 'customer name', 'organization', 'org name']),
+        breachException: find(['breach exception'])
     };
 }
 
@@ -561,6 +612,10 @@ function enrichData(data, mappings) {
         } else {
             result._ageToUse = 0;
         }
+        
+        // Calculate SLA status automatically
+        result._calculatedSLA = calculateSLA(result);
+        
         return result;
     });
 }
