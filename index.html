@@ -465,29 +465,72 @@ function initAllTabs() {
 function parseDate(dateValue) {
     if (!dateValue) return null;
     try {
+        // If already a valid Date object
         if (dateValue instanceof Date && !isNaN(dateValue)) return dateValue;
+        
         const str = String(dateValue).trim();
+        if (!str || str === '' || str === 'null' || str === 'undefined') return null;
+        
+        // Excel serial number (numeric)
         if (!isNaN(dateValue) && typeof dateValue === 'number') {
             const excelEpoch = new Date(1900, 0, 1);
             const msPerDay = 24 * 60 * 60 * 1000;
             return new Date(excelEpoch.getTime() + (dateValue - 2) * msPerDay);
         }
+        
+        // Try various date formats
+        // Format: M/D/YYYY or MM/DD/YYYY or M/D/YYYY H:MM:SS AM/PM
         if (str.includes('/')) {
             const parts = str.split(' ')[0].split('/');
             if (parts.length === 3) {
                 const month = parseInt(parts[0], 10);
                 const day = parseInt(parts[1], 10);
-                const year = parseInt(parts[2], 10);
+                let year = parseInt(parts[2], 10);
+                
+                // Handle 2-digit years
+                if (year < 100) {
+                    year = year > 50 ? 1900 + year : 2000 + year;
+                }
+                
                 if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year > 1900) {
                     const result = new Date(year, month - 1, day);
-                    if (!isNaN(result.getTime())) return result;
+                    if (!isNaN(result.getTime())) {
+                        console.log(`✅ Parsed date: ${str} → ${result.toISOString()}`);
+                        return result;
+                    }
                 }
             }
         }
+        
+        // Format: YYYY-MM-DD
+        if (str.includes('-') && str.length >= 10) {
+            const parts = str.substring(0, 10).split('-');
+            if (parts.length === 3) {
+                const year = parseInt(parts[0], 10);
+                const month = parseInt(parts[1], 10);
+                const day = parseInt(parts[2], 10);
+                
+                if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year > 1900) {
+                    const result = new Date(year, month - 1, day);
+                    if (!isNaN(result.getTime())) {
+                        console.log(`✅ Parsed date: ${str} → ${result.toISOString()}`);
+                        return result;
+                    }
+                }
+            }
+        }
+        
+        // Try native Date parsing as last resort
         const date = new Date(dateValue);
-        if (!isNaN(date.getTime())) return date;
+        if (!isNaN(date.getTime()) && date.getFullYear() > 1900) {
+            console.log(`✅ Parsed date (native): ${str} → ${date.toISOString()}`);
+            return date;
+        }
+        
+        console.warn(`⚠️ Could not parse date: ${str}`);
         return null;
     } catch (e) {
+        console.error(`❌ Error parsing date: ${dateValue}`, e);
         return null;
     }
 }
@@ -603,10 +646,16 @@ function detectColumns(data) {
     if (!data || data.length === 0) return {};
     const cols = Object.keys(data[0]);
     
+    console.log('🔍 Detecting columns from Excel...');
+    console.log(`📋 Available columns (${cols.length}):`, cols);
+    
     function find(patterns) {
         for (let p of patterns) {
             const exact = cols.find(c => c.toLowerCase() === p.toLowerCase());
-            if (exact) return exact;
+            if (exact) {
+                console.log(`✅ Found exact match: "${exact}" for pattern "${p}"`);
+                return exact;
+            }
         }
         for (let p of patterns) {
             const found = cols.find(c => {
@@ -618,12 +667,16 @@ function detectColumns(data) {
                        !colLower.includes('_id') &&
                        !colLower.match(/\d{5,}/);
             });
-            if (found) return found;
+            if (found) {
+                console.log(`✅ Found partial match: "${found}" for pattern "${p}"`);
+                return found;
+            }
         }
+        console.warn(`⚠️ No match found for patterns:`, patterns);
         return null;
     }
     
-    return {
+    const mapping = {
         status: find(['status', 'ticket status']),
         priority: find(['priority', 'urgency']),
         service: find(['service', 'service name', 'service type']),
@@ -640,18 +693,47 @@ function detectColumns(data) {
         productName: find(['product name', 'product']),
         productTier3: find(['product categorization tier 3', 'product cat tier 3'])
     };
+    
+    console.log('📊 Column mapping result:', mapping);
+    
+    return mapping;
 }
 
 function enrichData(data, mappings) {
-    return data.map(row => {
+    console.log('💾 Enriching data...');
+    console.log(`📋 Total rows to process: ${data.length}`);
+    console.log(`📅 Submit Date column: ${mappings.submitDate || 'NOT FOUND'}`);
+    console.log(`⏰ Age column: ${mappings.age || 'NOT FOUND'}`);
+    
+    let dateParseSuccessCount = 0;
+    let dateParseFailCount = 0;
+    
+    const enriched = data.map((row, index) => {
         const result = {...row};
+        
         if (mappings.submitDate && row[mappings.submitDate]) {
             result._submitDate = parseDate(row[mappings.submitDate]);
             if (result._submitDate) {
+                dateParseSuccessCount++;
                 result._calculatedAge = calcAge(row[mappings.submitDate]);
                 result._ageToUse = result._calculatedAge;
+                
+                // Log first 3 successful parses
+                if (dateParseSuccessCount <= 3) {
+                    console.log(`✅ Row ${index + 1}: Date parsed successfully`);
+                    console.log(`   Raw date: ${row[mappings.submitDate]}`);
+                    console.log(`   Parsed: ${result._submitDate.toISOString()}`);
+                    console.log(`   Age: ${result._ageToUse} hours`);
+                }
             } else {
+                dateParseFailCount++;
                 result._ageToUse = 0;
+                
+                // Log first 3 failures
+                if (dateParseFailCount <= 3) {
+                    console.warn(`⚠️ Row ${index + 1}: Date parse failed`);
+                    console.warn(`   Raw date value: ${row[mappings.submitDate]}`);
+                }
             }
         } else if (mappings.age && row[mappings.age]) {
             const existingAge = parseFloat(row[mappings.age]);
@@ -665,6 +747,12 @@ function enrichData(data, mappings) {
         
         return result;
     });
+    
+    console.log(`✅ Date parsing summary:`);
+    console.log(`   Success: ${dateParseSuccessCount}/${data.length}`);
+    console.log(`   Failed: ${dateParseFailCount}/${data.length}`);
+    
+    return enriched;
 }
 
 function getAge(row) {
@@ -722,19 +810,34 @@ function handleFile() {
     reader.onload = function(e) {
         try {
             const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+            const workbook = XLSX.read(data, { type: 'array', cellDates: true, cellText: false, cellNF: false });
             const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-            let rawData = XLSX.utils.sheet_to_json(firstSheet, { raw: false });
             
+            // Try different parsing options for ROXANNE files
+            let rawData = XLSX.utils.sheet_to_json(firstSheet, { raw: false, defval: '' });
+            
+            console.log('📊 File loaded:', file.name);
+            console.log('📋 Total rows:', rawData.length);
+            console.log('📑 Sample row:', rawData[0]);
+            
+            // Skip header rows if needed
             if (rawData.length > 0 && Object.keys(rawData[0]).length <= 3) {
+                console.log('⚠️ Skipping header row');
                 rawData = rawData.slice(1);
             }
             
-            if (rawData.length === 0) throw new Error('Empty file');
+            if (rawData.length === 0) throw new Error('No data found in file');
             
+            console.log('🔍 Detecting columns...');
             columnMappings = detectColumns(rawData);
+            console.log('✅ Columns detected:', columnMappings);
+            
+            console.log('💾 Enriching data...');
             ticketData = enrichData(rawData, columnMappings);
             filteredData = ticketData;
+            
+            console.log('✅ Sample enriched row:', filteredData[0]);
+            console.log(`📊 Age calculation test - First ticket age: ${filteredData[0]._ageToUse} hours`);
             
             setDefaultDateRange();
             populateFilters();
@@ -744,7 +847,8 @@ function handleFile() {
             loading.style.display = 'none';
             dashboardContent.classList.add('active');
         } catch (error) {
-            errorMessage.innerHTML = `<div class="error-message">${error.message}</div>`;
+            console.error('❌ Error processing file:', error);
+            errorMessage.innerHTML = `<div class="error-message">Error: ${error.message}<br>Check browser console (F12) for details</div>`;
             loading.style.display = 'none';
         }
     };
