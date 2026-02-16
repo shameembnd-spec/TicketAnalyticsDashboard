@@ -813,18 +813,52 @@ function handleFile() {
             const workbook = XLSX.read(data, { type: 'array', cellDates: true, cellText: false, cellNF: false });
             const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
             
-            // Try different parsing options for ROXANNE files
-            let rawData = XLSX.utils.sheet_to_json(firstSheet, { raw: false, defval: '' });
-            
             console.log('📊 File loaded:', file.name);
-            console.log('📋 Total rows:', rawData.length);
-            console.log('📑 Sample row:', rawData[0]);
             
-            // Skip header rows if needed
-            if (rawData.length > 0 && Object.keys(rawData[0]).length <= 3) {
-                console.log('⚠️ Skipping header row');
-                rawData = rawData.slice(1);
+            // Check if this is a ROXANNE file with malformed structure
+            let rawData = XLSX.utils.sheet_to_json(firstSheet, { raw: false, defval: '' });
+            const firstRowKeys = Object.keys(rawData[0] || {});
+            const hasEmptyColumns = firstRowKeys.some(k => k.includes('__EMPTY'));
+            
+            console.log('📋 First attempt - Total rows:', rawData.length);
+            console.log('📑 First row keys:', firstRowKeys);
+            
+            // If we have __EMPTY__ columns, this is a ROXANNE file - use row 2 as headers
+            if (hasEmptyColumns || (firstRowKeys.length > 0 && firstRowKeys[0].includes('ROXANNE'))) {
+                console.log('🔄 Detected ROXANNE format - reprocessing with row 2 as headers...');
+                
+                // Parse without headers first
+                const allRows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, raw: false, defval: '' });
+                console.log('📊 Raw rows:', allRows.length);
+                console.log('📑 Row 1 (title):', allRows[0]);
+                console.log('📑 Row 2 (headers):', allRows[1]);
+                console.log('📑 Row 3 (first data):', allRows[2]);
+                
+                if (allRows.length < 3) {
+                    throw new Error('ROXANNE file has insufficient rows');
+                }
+                
+                // Row 2 should be the headers
+                const headers = allRows[1];
+                // Rows 3+ are the data
+                const dataRows = allRows.slice(2);
+                
+                // Convert to objects using row 2 as headers
+                rawData = dataRows.map(row => {
+                    const obj = {};
+                    headers.forEach((header, index) => {
+                        if (header && header !== '') {
+                            obj[header] = row[index] || '';
+                        }
+                    });
+                    return obj;
+                }).filter(obj => Object.keys(obj).length > 0);
+                
+                console.log('✅ ROXANNE reprocessed - Data rows:', rawData.length);
+                console.log('✅ Sample reprocessed row:', rawData[0]);
             }
+            
+            console.log('📋 Final row count:', rawData.length);
             
             if (rawData.length === 0) throw new Error('No data found in file');
             
