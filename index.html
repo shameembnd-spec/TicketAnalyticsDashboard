@@ -230,6 +230,9 @@ let ticketData = null;
 let filteredData = null;
 let columnMappings = {};
 
+// SLA Lookup Table from IOT SLAs configuration
+const SLA_LOOKUP_TABLE = {"priority_defaults":{"Critical":24,"High":48,"Medium":72,"Low":120},"service_priority_rules":{"ECM|Critical":14,"ECM|Medium":48,"ECM|Low":20,"VsaaS|Medium":1,"VsaaS|Low":2,"VsaaS|High":2,"VsaaS|Critical":0.5,"Industrial IoT|Critical":0.5,"Industrial IoT|High":1,"Special Projects|Critical":8,"Special Projects|Medium":48,"Industrial IoT|Medium":72,"Special Projects|High":24,"Special Projects|Low":40,"ECM|High":28},"product_priority_rules":{"Connected Workers|High":72,"Connected Workers|Critical":48,"MOBILE GSM|Medium":1,"MOBILE GSM|Low":2,"MOBILE GSM|High":2,"Assets Tracking|High":12,"Smart City - Smart Parking|High":4,"MOBILE GSM|Critical":0.5,"IoT/AI Processing|High":72,"IoT/AI Processing|Medium":168,"IoT/AI Processing|Critical":24,"Smart District Platform|High":48,"Assets Tracking|Medium":72,"AVAYA|High":6,"AVAYA|Medium":8,"SMART STATION|High":0.5,"Dubai Frame|Low":6,"Al Qana|Critical":0.5,"Smart Metering|Critical":0.5,"Smart Metering|High":1,"Al Ansari Smart Kiosks|Critical":8,"Al Ansari Smart Kiosks|Medium":48,"Al Qana|Medium":24,"Sharjah Safari|Low":120,"Smart Metering|Medium":72,"IoT CONNECTIVITY|High":0.5,"IoT CONNECTIVITY|Low":24,"In Vehicle WiFi|High":72,"In Vehicle WiFi|Medium":96,"IN VEHICLE SURVEILLANCE|Critical":1.17,"MANAGED DI|High":9,"MANAGED DI|Medium":16,"ETISALAT VIDEO CLOUD - APPLICATION|Low":48,"ETISALAT VIDEO CLOUD - APPLICATION|Critical":4,"Digital Signage|Critical":12,"Digital Signage|High":24,"Smart Vehicle Tracking|Medium":72,"Dubai Frame|Critical":1.5,"Smart City - Smart Parking|Critical":2,"Dubai Police FP|Critical":8,"IoT - NB IoT|Low":96,"IN VEHICLE SURVEILLANCE|High":2,"Al Qana|High":24,"MANAGED DI|Low":32,"IN VEHICLE SURVEILLANCE|Medium":12,"IN VEHICLE SURVEILLANCE|Low":24,"VSAAS|Critical":1.25,"MANAGED DPI|Critical":4,"MANAGED DI|Critical":6,"Smart Parking|Low":24,"Digital Payment|Medium":72,"MANAGED DPI|High":8,"Dubai Police FP|High":80,"Smart City - Smart Parking|Medium":16,"Al Ansari Smart Kiosks|High":24,"Al Qana|Low":240,"Dubai Frame|Medium":48,"Digital Payment|High":48,"ETISALAT VIDEO CLOUD - APPLICATION|Medium":24,"Sharjah Safari|Critical":1,"Sharjah Safari|High":4,"Sharjah Safari|Medium":48,"MBRL|High":16,"MBRL|Medium":24,"MBRL|Low":40,"IoT CONNECTIVITY|Critical":0.17,"IoT CONNECTIVITY|Medium":1,"MOHAP|Critical":4,"MOHAP|High":24,"MOHAP|Medium":32,"MOHAP|Low":80,"Dubai Frame|High":6,"SMART STATION|Medium":1,"Smart Parking|High":2,"SMART STATION|Low":2,"Smart Parking|Medium":12,"VSaaS|Critical":4,"VSaaS|Medium":24,"Smart District Platform|Critical":2,"Smart District Platform|Medium":96,"ETISALAT VIDEO CLOUD - APPLICATION|High":8,"MBRL|Critical":8,"Connected Workers|Medium":96,"VSaaS|High":0.5,"Digital Signage|Medium":48,"Connected Workers|Low":8,"Digital Payment|Critical":8,"SMART BUILDING|Critical":0.25,"SMART BUILDING|Medium":72,"CO-Working|High":1,"Secure Vehicle Tracking|High":0.5,"VSaaS|Low":168,"HASSANTUK|Low":24,"HASSANTUK|High":24,"CO-Working|Medium":24,"UTM|Critical":0.08,"UTM|High":4,"Digital Payment|Low":96,"UTM|Low":48,"SMART BUILDING|High":8,"In Vehicle WiFi|Critical":1,"Digital Signage|Low":3,"CO-Working|Critical":0.5,"Secure Vehicle Tracking|Low":5,"Secure Vehicle Tracking|Medium":1,"Secure Vehicle Tracking|Critical":0.17,"UTM|Medium":12,"IoTSync|Medium":48,"Redigized Devices|High":1,"HASSANTUK|Medium":24,"In Vehicle WiFi|Low":48,"Redigized Devices|Critical":6,"Redigized Devices|Medium":480,"Smart District Platform|Low":120,"SMART STATION|Critical":4,"SMART BUILDING|Low":0.17,"HASSANTUK|Critical":0.25}};
+
 Chart.defaults.color = '#94a3b8';
 Chart.defaults.font.family = "'Inter', sans-serif";
 
@@ -512,18 +515,60 @@ function getSLA(row) {
 }
 
 function calculateSLA(row) {
-    // Calculate SLA status based on Excel formulas
-    // Logic: IF (Client Hold) THEN "SLA MET" ELSE IF (Age > Target) THEN "SLA BREACHED" ELSE "SLA MET"
+    // Calculate SLA status based on Excel formulas and IOT SLA rules
+    // Logic: 
+    // 1. Determine SLA Target from lookup table or Excel column
+    // 2. Check for exceptions (Client Hold)
+    // 3. Compare age vs target to determine status
     
     const ageHours = row._ageToUse; // Age in hours
     
-    // Check for SLA Target
+    // Step 1: Determine SLA Target
     let slaTarget = null;
-    if (columnMappings.slaTarget && row[columnMappings.slaTarget]) {
-        slaTarget = parseFloat(row[columnMappings.slaTarget]);
+    
+    // Try to get priority
+    let priority = null;
+    if (columnMappings.priority && row[columnMappings.priority]) {
+        priority = String(row[columnMappings.priority]).trim();
     }
     
-    // Check for breach exception (Client Hold)
+    // Method A: Try Product Name + Priority lookup
+    if (priority && columnMappings.productName && row[columnMappings.productName]) {
+        const productName = String(row[columnMappings.productName]).trim();
+        const lookupKey = `${productName}|${priority}`;
+        if (SLA_LOOKUP_TABLE.product_priority_rules[lookupKey]) {
+            slaTarget = SLA_LOOKUP_TABLE.product_priority_rules[lookupKey];
+        }
+    }
+    
+    // Method B: Try Product Tier 3 (Service) + Priority lookup
+    if (!slaTarget && priority && columnMappings.productTier3 && row[columnMappings.productTier3]) {
+        const productTier3 = String(row[columnMappings.productTier3]).trim();
+        const lookupKey = `${productTier3}|${priority}`;
+        if (SLA_LOOKUP_TABLE.service_priority_rules[lookupKey]) {
+            slaTarget = SLA_LOOKUP_TABLE.service_priority_rules[lookupKey];
+        }
+    }
+    
+    // Method C: Use priority default
+    if (!slaTarget && priority && SLA_LOOKUP_TABLE.priority_defaults[priority]) {
+        slaTarget = SLA_LOOKUP_TABLE.priority_defaults[priority];
+    }
+    
+    // Method D: Use SLA TARGET column from Excel
+    if (!slaTarget && columnMappings.slaTarget && row[columnMappings.slaTarget]) {
+        const excelTarget = parseFloat(row[columnMappings.slaTarget]);
+        if (!isNaN(excelTarget)) {
+            slaTarget = excelTarget;
+        }
+    }
+    
+    // Method E: Default fallback
+    if (!slaTarget) {
+        slaTarget = 48; // Default 48 hours
+    }
+    
+    // Step 2: Check for breach exception (Client Hold)
     let hasException = false;
     
     // Check Status_Reason for "Client Hold"
@@ -542,12 +587,12 @@ function calculateSLA(row) {
         }
     }
     
-    // Calculate SLA Status
+    // Step 3: Calculate SLA Status
     if (hasException) {
         return 'SLA MET';
-    } else if (slaTarget && ageHours > slaTarget) {
+    } else if (ageHours > slaTarget) {
         return 'SLA BREACHED';
-    } else if (slaTarget && ageHours > (slaTarget * 0.75)) {
+    } else if (ageHours > (slaTarget * 0.75)) {
         return 'AT RISK'; // 75% of SLA consumed
     } else {
         return 'SLA MET';
@@ -591,7 +636,9 @@ function detectColumns(data) {
         submitDate: find(['submit date', 'submitted date', 'created date', 'reported date']),
         incidentId: find(['incident id', 'incident number', 'ticket id']),
         company: find(['company', 'company name', 'customer', 'customer name', 'organization', 'org name']),
-        breachException: find(['breach exception'])
+        breachException: find(['breach exception']),
+        productName: find(['product name', 'product']),
+        productTier3: find(['product categorization tier 3', 'product cat tier 3'])
     };
 }
 
