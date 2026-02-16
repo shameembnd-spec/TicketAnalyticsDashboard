@@ -544,6 +544,37 @@ function calcAge(dateValue) {
     return Math.max(0, hrs);
 }
 
+function calcBusinessDays(startDate, endDate) {
+    // Calculate business days (exclude weekends)
+    if (!startDate || !endDate) return 0;
+    
+    let count = 0;
+    let current = new Date(startDate);
+    const end = new Date(endDate);
+    
+    while (current <= end) {
+        const dayOfWeek = current.getDay();
+        // 0 = Sunday, 6 = Saturday
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+            count++;
+        }
+        current.setDate(current.getDate() + 1);
+    }
+    
+    return count * 24; // Return hours (business days * 24 hours)
+}
+
+function calcBusinessAge(dateValue, resolvedDate) {
+    const startDate = parseDate(dateValue);
+    if (!startDate) return 0;
+    
+    // Use resolved date if available, otherwise current date
+    const endDate = resolvedDate ? parseDate(resolvedDate) : new Date();
+    if (!endDate) return 0;
+    
+    return calcBusinessDays(startDate, endDate);
+}
+
 function getSLA(row) {
     // If we have a calculated SLA status, use it
     if (row._calculatedSLA) {
@@ -558,15 +589,51 @@ function getSLA(row) {
 }
 
 function calculateSLA(row) {
-    // Calculate SLA status based on Excel formulas and IOT SLA rules
-    // Logic: 
-    // 1. Determine SLA Target from lookup table or Excel column
-    // 2. Check for exceptions (Client Hold)
-    // 3. Compare age vs target to determine status
+    // SLA RULES:
+    // - Start: Submit Date
+    // - Stop: Resolved Date (or current if not resolved)
+    // - Pause Statuses: Client Hold, Client Action Required, Pending on client, 
+    //   Awaiting Customer, Monitoring Incident, Internal to Etisalat, Future Enhancement
+    // - Hours: Business Days Only (exclude weekends)
     
-    const ageHours = row._ageToUse; // Age in hours
+    const ageHours = row._ageToUse; // Age in business hours
     
-    // Step 1: Determine SLA Target
+    // Define pause statuses (case-insensitive matching)
+    const pauseStatuses = [
+        'client hold',
+        'client action required',
+        'pending on client',
+        'awaiting customer',
+        'monitoring incident',
+        'internal to etisalat',
+        'future enhancement'
+    ];
+    
+    // Step 1: Check if ticket is currently in a pause status
+    let isPaused = false;
+    if (columnMappings.statusReason && row[columnMappings.statusReason]) {
+        const statusReason = String(row[columnMappings.statusReason]).toLowerCase().trim();
+        isPaused = pauseStatuses.some(pause => statusReason.includes(pause));
+        
+        if (isPaused) {
+            console.log(`⏸️ Ticket paused: Status Reason = "${row[columnMappings.statusReason]}"`);
+        }
+    }
+    
+    // Step 2: Check Breach Exception column
+    if (columnMappings.breachException && row[columnMappings.breachException]) {
+        const exception = String(row[columnMappings.breachException]).toUpperCase();
+        if (exception === 'YES') {
+            isPaused = true;
+        }
+    }
+    
+    // If currently paused, SLA is automatically MET
+    if (isPaused) {
+        return 'SLA MET';
+    }
+    
+    // Step 3: Determine SLA Target (using IOT rules)
     let slaTarget = null;
     
     // Try to get priority
@@ -611,29 +678,8 @@ function calculateSLA(row) {
         slaTarget = 48; // Default 48 hours
     }
     
-    // Step 2: Check for breach exception (Client Hold)
-    let hasException = false;
-    
-    // Check Status_Reason for "Client Hold"
-    if (columnMappings.statusReason && row[columnMappings.statusReason]) {
-        const reason = String(row[columnMappings.statusReason]).toLowerCase();
-        if (reason.includes('client hold') || reason.includes('pending')) {
-            hasException = true;
-        }
-    }
-    
-    // Check Breach Exception column
-    if (columnMappings.breachException && row[columnMappings.breachException]) {
-        const exception = String(row[columnMappings.breachException]).toUpperCase();
-        if (exception === 'YES') {
-            hasException = true;
-        }
-    }
-    
-    // Step 3: Calculate SLA Status
-    if (hasException) {
-        return 'SLA MET';
-    } else if (ageHours > slaTarget) {
+    // Step 4: Compare age vs target
+    if (ageHours > slaTarget) {
         return 'SLA BREACHED';
     } else if (ageHours > (slaTarget * 0.75)) {
         return 'AT RISK'; // 75% of SLA consumed
@@ -687,6 +733,7 @@ function detectColumns(data) {
         age: find(['age', 'hrs round off', 'ticket age']),
         statusReason: find(['status_reason', 'status reason', 'status_reason_hidden']),
         submitDate: find(['submit date', 'submitted date', 'created date', 'reported date']),
+        resolvedDate: find(['resolved date', 'last resolved date', 'resolution date', 'closed date']),
         incidentId: find(['incident id', 'incident number', 'ticket id']),
         company: find(['company', 'company name', 'customer', 'customer name', 'organization', 'org name']),
         breachException: find(['breach exception']),
@@ -703,27 +750,42 @@ function enrichData(data, mappings) {
     console.log('💾 Enriching data...');
     console.log(`📋 Total rows to process: ${data.length}`);
     console.log(`📅 Submit Date column: ${mappings.submitDate || 'NOT FOUND'}`);
+    console.log(`📅 Resolved Date column: ${mappings.resolvedDate || 'NOT FOUND'}`);
     console.log(`⏰ Age column: ${mappings.age || 'NOT FOUND'}`);
     
     let dateParseSuccessCount = 0;
     let dateParseFailCount = 0;
+    let businessDaysUsed = 0;
     
     const enriched = data.map((row, index) => {
         const result = {...row};
         
         if (mappings.submitDate && row[mappings.submitDate]) {
             result._submitDate = parseDate(row[mappings.submitDate]);
+            
             if (result._submitDate) {
                 dateParseSuccessCount++;
-                result._calculatedAge = calcAge(row[mappings.submitDate]);
+                
+                // Get resolved date if available
+                const resolvedDate = mappings.resolvedDate && row[mappings.resolvedDate] 
+                    ? parseDate(row[mappings.resolvedDate]) 
+                    : null;
+                
+                result._resolvedDate = resolvedDate;
+                
+                // Calculate age in BUSINESS DAYS (exclude weekends)
+                result._calculatedAge = calcBusinessAge(row[mappings.submitDate], resolvedDate);
                 result._ageToUse = result._calculatedAge;
+                businessDaysUsed++;
                 
                 // Log first 3 successful parses
                 if (dateParseSuccessCount <= 3) {
                     console.log(`✅ Row ${index + 1}: Date parsed successfully`);
-                    console.log(`   Raw date: ${row[mappings.submitDate]}`);
-                    console.log(`   Parsed: ${result._submitDate.toISOString()}`);
-                    console.log(`   Age: ${result._ageToUse} hours`);
+                    console.log(`   Submit date: ${result._submitDate.toISOString()}`);
+                    if (resolvedDate) {
+                        console.log(`   Resolved date: ${resolvedDate.toISOString()}`);
+                    }
+                    console.log(`   Age (business days): ${result._ageToUse} hours`);
                 }
             } else {
                 dateParseFailCount++;
@@ -751,6 +813,7 @@ function enrichData(data, mappings) {
     console.log(`✅ Date parsing summary:`);
     console.log(`   Success: ${dateParseSuccessCount}/${data.length}`);
     console.log(`   Failed: ${dateParseFailCount}/${data.length}`);
+    console.log(`   Using business days: ${businessDaysUsed}/${data.length}`);
     
     return enriched;
 }
