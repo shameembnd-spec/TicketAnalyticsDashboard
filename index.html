@@ -230,8 +230,9 @@ let ticketData = null;
 let filteredData = null;
 let columnMappings = {};
 
-// SLA Lookup Table from IOT SLAs configuration
-const SLA_LOOKUP_TABLE = {"priority_defaults":{"Critical":24,"High":48,"Medium":72,"Low":120},"service_priority_rules":{"ECM|Critical":14,"ECM|Medium":48,"ECM|Low":20,"VsaaS|Medium":1,"VsaaS|Low":2,"VsaaS|High":2,"VsaaS|Critical":0.5,"Industrial IoT|Critical":0.5,"Industrial IoT|High":1,"Special Projects|Critical":8,"Special Projects|Medium":48,"Industrial IoT|Medium":72,"Special Projects|High":24,"Special Projects|Low":40,"ECM|High":28},"product_priority_rules":{"Connected Workers|High":72,"Connected Workers|Critical":48,"MOBILE GSM|Medium":1,"MOBILE GSM|Low":2,"MOBILE GSM|High":2,"Assets Tracking|High":12,"Smart City - Smart Parking|High":4,"MOBILE GSM|Critical":0.5,"IoT/AI Processing|High":72,"IoT/AI Processing|Medium":168,"IoT/AI Processing|Critical":24,"Smart District Platform|High":48,"Assets Tracking|Medium":72,"AVAYA|High":6,"AVAYA|Medium":8,"SMART STATION|High":0.5,"Dubai Frame|Low":6,"Al Qana|Critical":0.5,"Smart Metering|Critical":0.5,"Smart Metering|High":1,"Al Ansari Smart Kiosks|Critical":8,"Al Ansari Smart Kiosks|Medium":48,"Al Qana|Medium":24,"Sharjah Safari|Low":120,"Smart Metering|Medium":72,"IoT CONNECTIVITY|High":0.5,"IoT CONNECTIVITY|Low":24,"In Vehicle WiFi|High":72,"In Vehicle WiFi|Medium":96,"IN VEHICLE SURVEILLANCE|Critical":1.17,"MANAGED DI|High":9,"MANAGED DI|Medium":16,"ETISALAT VIDEO CLOUD - APPLICATION|Low":48,"ETISALAT VIDEO CLOUD - APPLICATION|Critical":4,"Digital Signage|Critical":12,"Digital Signage|High":24,"Smart Vehicle Tracking|Medium":72,"Dubai Frame|Critical":1.5,"Smart City - Smart Parking|Critical":2,"Dubai Police FP|Critical":8,"IoT - NB IoT|Low":96,"IN VEHICLE SURVEILLANCE|High":2,"Al Qana|High":24,"MANAGED DI|Low":32,"IN VEHICLE SURVEILLANCE|Medium":12,"IN VEHICLE SURVEILLANCE|Low":24,"VSAAS|Critical":1.25,"MANAGED DPI|Critical":4,"MANAGED DI|Critical":6,"Smart Parking|Low":24,"Digital Payment|Medium":72,"MANAGED DPI|High":8,"Dubai Police FP|High":80,"Smart City - Smart Parking|Medium":16,"Al Ansari Smart Kiosks|High":24,"Al Qana|Low":240,"Dubai Frame|Medium":48,"Digital Payment|High":48,"ETISALAT VIDEO CLOUD - APPLICATION|Medium":24,"Sharjah Safari|Critical":1,"Sharjah Safari|High":4,"Sharjah Safari|Medium":48,"MBRL|High":16,"MBRL|Medium":24,"MBRL|Low":40,"IoT CONNECTIVITY|Critical":0.17,"IoT CONNECTIVITY|Medium":1,"MOHAP|Critical":4,"MOHAP|High":24,"MOHAP|Medium":32,"MOHAP|Low":80,"Dubai Frame|High":6,"SMART STATION|Medium":1,"Smart Parking|High":2,"SMART STATION|Low":2,"Smart Parking|Medium":12,"VSaaS|Critical":4,"VSaaS|Medium":24,"Smart District Platform|Critical":2,"Smart District Platform|Medium":96,"ETISALAT VIDEO CLOUD - APPLICATION|High":8,"MBRL|Critical":8,"Connected Workers|Medium":96,"VSaaS|High":0.5,"Digital Signage|Medium":48,"Connected Workers|Low":8,"Digital Payment|Critical":8,"SMART BUILDING|Critical":0.25,"SMART BUILDING|Medium":72,"CO-Working|High":1,"Secure Vehicle Tracking|High":0.5,"VSaaS|Low":168,"HASSANTUK|Low":24,"HASSANTUK|High":24,"CO-Working|Medium":24,"UTM|Critical":0.08,"UTM|High":4,"Digital Payment|Low":96,"UTM|Low":48,"SMART BUILDING|High":8,"In Vehicle WiFi|Critical":1,"Digital Signage|Low":3,"CO-Working|Critical":0.5,"Secure Vehicle Tracking|Low":5,"Secure Vehicle Tracking|Medium":1,"Secure Vehicle Tracking|Critical":0.17,"UTM|Medium":12,"IoTSync|Medium":48,"Redigized Devices|High":1,"HASSANTUK|Medium":24,"In Vehicle WiFi|Low":48,"Redigized Devices|Critical":6,"Redigized Devices|Medium":480,"Smart District Platform|Low":120,"SMART STATION|Critical":4,"SMART BUILDING|Low":0.17,"HASSANTUK|Critical":0.25}};
+// IOT SLA Rules (132 rules: 24x7/8x5/9x5)
+const IOT_SLA_RULES = {"SVC:ECM|Critical":{"h":14.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"SVC:ECM|Medium":{"h":48.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"SVC:ECM|Low":{"h":20.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Connected Workers|High":{"h":72.0,"tag":"Public Cloud 8*5","s":"8x5","hpd":8,"es":true,"eu":true},"Connected Workers|Critical":{"h":48.0,"tag":"Public Cloud 8*5","s":"8x5","hpd":8,"es":true,"eu":true},"MOBILE GSM|Medium":{"h":1.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"SVC:VsaaS|Medium":{"h":1.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"MOBILE GSM|Low":{"h":2.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"SVC:VsaaS|Low":{"h":2.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"MOBILE GSM|High":{"h":2.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"SVC:VsaaS|High":{"h":2.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Assets Tracking|High":{"h":12.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Smart City - Smart Parking|High":{"h":4.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"MOBILE GSM|Critical":{"h":0.5,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"SVC:VsaaS|Critical":{"h":0.5,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"IoT/AI Processing|High":{"h":72.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"IoT/AI Processing|Medium":{"h":168.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"IoT/AI Processing|Critical":{"h":24.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Smart District Platform|High":{"h":48.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Assets Tracking|Medium":{"h":72.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"AVAYA|High":{"h":6.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"AVAYA|Medium":{"h":8.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"SMART STATION|High":{"h":0.5,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Dubai Frame|Low":{"h":6.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Al Qana|Critical":{"h":0.5,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Smart Metering|Critical":{"h":0.5,"tag":"Public Cloud 8*5","s":"8x5","hpd":8,"es":true,"eu":true},"SVC:Industrial IoT|Critical":{"h":0.5,"tag":"Public Cloud 8*5","s":"8x5","hpd":8,"es":true,"eu":true},"Smart Metering|High":{"h":1.0,"tag":"Public Cloud 8*5","s":"8x5","hpd":8,"es":true,"eu":true},"SVC:Industrial IoT|High":{"h":1.0,"tag":"Public Cloud 8*5","s":"8x5","hpd":8,"es":true,"eu":true},"Al Ansari Smart Kiosks|Critical":{"h":8.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"SVC:Special Projects|Critical":{"h":8.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Al Ansari Smart Kiosks|Medium":{"h":48.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"SVC:Special Projects|Medium":{"h":48.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Al Qana|Medium":{"h":24.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Sharjah Safari|Low":{"h":120.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Smart Metering|Medium":{"h":72.0,"tag":"Public Cloud 8*5","s":"8x5","hpd":8,"es":true,"eu":true},"SVC:Industrial IoT|Medium":{"h":72.0,"tag":"Public Cloud 8*5","s":"8x5","hpd":8,"es":true,"eu":true},"IoT CONNECTIVITY|High":{"h":0.5,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"IoT CONNECTIVITY|Low":{"h":24.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"In Vehicle WiFi|High":{"h":72.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"In Vehicle WiFi|Medium":{"h":96.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"IN VEHICLE SURVEILLANCE|Critical":{"h":1.1667,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"MANAGED DI|High":{"h":9.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"MANAGED DI|Medium":{"h":16.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"ETISALAT VIDEO CLOUD - APPLICATION|Low":{"h":48.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"ETISALAT VIDEO CLOUD - APPLICATION|Critical":{"h":4.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Digital Signage|Critical":{"h":12.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Digital Signage|High":{"h":24.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Smart Vehicle Tracking|Medium":{"h":72.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Dubai Frame|Critical":{"h":1.5,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Smart City - Smart Parking|Critical":{"h":2.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Dubai Police FP|Critical":{"h":8.0,"tag":"Public Cloud 8*5","s":"8x5","hpd":8,"es":true,"eu":true},"IoT - NB IoT|Low":{"h":96.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"IN VEHICLE SURVEILLANCE|High":{"h":2.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Al Qana|High":{"h":24.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"MANAGED DI|Low":{"h":32.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"IN VEHICLE SURVEILLANCE|Medium":{"h":12.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"IN VEHICLE SURVEILLANCE|Low":{"h":24.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"VSAAS|Critical":{"h":1.25,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"MANAGED DPI|Critical":{"h":4.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"MANAGED DI|Critical":{"h":6.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Smart Parking|Low":{"h":24.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Digital Payment|Medium":{"h":72.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"MANAGED DPI|High":{"h":8.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Dubai Police FP|High":{"h":80.0,"tag":"Public Cloud 8*5","s":"8x5","hpd":8,"es":true,"eu":true},"Smart City - Smart Parking|Medium":{"h":16.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Al Ansari Smart Kiosks|High":{"h":24.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"SVC:Special Projects|High":{"h":24.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Al Qana|Low":{"h":240.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Dubai Frame|Medium":{"h":48.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Digital Payment|High":{"h":48.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"ETISALAT VIDEO CLOUD - APPLICATION|Medium":{"h":24.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Sharjah Safari|Critical":{"h":1.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Sharjah Safari|High":{"h":4.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Sharjah Safari|Medium":{"h":48.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"MBRL|High":{"h":16.0,"tag":"Public Cloud 8*5","s":"8x5","hpd":8,"es":true,"eu":true},"MBRL|Medium":{"h":24.0,"tag":"Public Cloud 8*5","s":"8x5","hpd":8,"es":true,"eu":true},"MBRL|Low":{"h":40.0,"tag":"Public Cloud 8*5","s":"8x5","hpd":8,"es":true,"eu":true},"SVC:Special Projects|Low":{"h":40.0,"tag":"Public Cloud 8*5","s":"8x5","hpd":8,"es":true,"eu":true},"IoT CONNECTIVITY|Critical":{"h":0.1667,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"IoT CONNECTIVITY|Medium":{"h":1.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"MOHAP|Critical":{"h":4.0,"tag":"Public Cloud 8*5","s":"8x5","hpd":8,"es":true,"eu":true},"MOHAP|High":{"h":24.0,"tag":"Public Cloud 8*5","s":"8x5","hpd":8,"es":true,"eu":true},"MOHAP|Medium":{"h":32.0,"tag":"Public Cloud 8*5","s":"8x5","hpd":8,"es":true,"eu":true},"MOHAP|Low":{"h":80.0,"tag":"Public Cloud 8*5","s":"8x5","hpd":8,"es":true,"eu":true},"SVC:ECM|High":{"h":28.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Dubai Frame|High":{"h":6.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"SMART STATION|Medium":{"h":1.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Smart Parking|High":{"h":2.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"SMART STATION|Low":{"h":2.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Smart Parking|Medium":{"h":12.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"VSaaS|Critical":{"h":4.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"VSaaS|Medium":{"h":24.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Smart District Platform|Critical":{"h":2.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Smart District Platform|Medium":{"h":96.0,"tag":"ETISALAT 9*5","s":"9x5","hpd":9,"es":true,"eu":true},"ETISALAT VIDEO CLOUD - APPLICATION|High":{"h":8.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"MBRL|Critical":{"h":8.0,"tag":"Public Cloud 8*5","s":"8x5","hpd":8,"es":true,"eu":true},"Connected Workers|Medium":{"h":96.0,"tag":"Public Cloud 8*5","s":"8x5","hpd":8,"es":true,"eu":true},"VSaaS|High":{"h":0.5,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Digital Signage|Medium":{"h":48.0,"tag":"Public Cloud 8*5","s":"8x5","hpd":8,"es":true,"eu":true},"Connected Workers|Low":{"h":8.0,"tag":"ETISALAT 9*5","s":"9x5","hpd":9,"es":true,"eu":true},"Digital Payment|Critical":{"h":8.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"SMART BUILDING|Critical":{"h":0.25,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"SMART BUILDING|Medium":{"h":72.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"CO-Working|High":{"h":1.0,"tag":"ETISALAT 9*5","s":"9x5","hpd":9,"es":true,"eu":true},"Secure Vehicle Tracking|High":{"h":0.5,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"VSaaS|Low":{"h":168.0,"tag":"Public Cloud 8*5","s":"8x5","hpd":8,"es":true,"eu":true},"HASSANTUK|Low":{"h":24.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"HASSANTUK|High":{"h":24.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"CO-Working|Medium":{"h":24.0,"tag":"ETISALAT 9*5","s":"9x5","hpd":9,"es":true,"eu":true},"UTM|Critical":{"h":0.0833,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"UTM|High":{"h":4.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Digital Payment|Low":{"h":96.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"UTM|Low":{"h":48.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"SMART BUILDING|High":{"h":8.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"In Vehicle WiFi|Critical":{"h":1.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Digital Signage|Low":{"h":3.0,"tag":"Public Cloud 8*5","s":"8x5","hpd":8,"es":true,"eu":true},"CO-Working|Critical":{"h":0.5,"tag":"ETISALAT 9*5","s":"9x5","hpd":9,"es":true,"eu":true},"Secure Vehicle Tracking|Low":{"h":5.0,"tag":"ETISALAT 9*5","s":"9x5","hpd":9,"es":true,"eu":true},"Secure Vehicle Tracking|Medium":{"h":1.0,"tag":"ETISALAT 9*5","s":"9x5","hpd":9,"es":true,"eu":true},"Secure Vehicle Tracking|Critical":{"h":0.1667,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"UTM|Medium":{"h":12.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"IoTSync|Medium":{"h":48.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Redigized Devices|High":{"h":1.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"HASSANTUK|Medium":{"h":24.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"In Vehicle WiFi|Low":{"h":48.0,"tag":"Public Cloud 8*5","s":"8x5","hpd":8,"es":true,"eu":true},"Redigized Devices|Critical":{"h":6.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Redigized Devices|Medium":{"h":480.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"Smart District Platform|Low":{"h":120.0,"tag":"ETISALAT 9*5","s":"9x5","hpd":9,"es":true,"eu":true},"SMART STATION|Critical":{"h":4.0,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false},"SMART BUILDING|Low":{"h":0.1667,"tag":"ETISALAT 9*5","s":"9x5","hpd":9,"es":true,"eu":true},"HASSANTUK|Critical":{"h":0.25,"tag":"Etisalat - 24*7","s":"24x7","hpd":24,"es":false,"eu":false}};
+const PRIORITY_DEFAULTS = {Critical:{h:24,s:'24x7',hpd:24,es:false,eu:false},High:{h:48,s:'24x7',hpd:24,es:false,eu:false},Medium:{h:72,s:'24x7',hpd:24,es:false,eu:false},Low:{h:120,s:'24x7',hpd:24,es:false,eu:false}};
 
 Chart.defaults.color = '#94a3b8';
 Chart.defaults.font.family = "'Inter', sans-serif";
@@ -535,177 +536,102 @@ function parseDate(dateValue) {
     }
 }
 
-function calcAge(dateValue) {
-    const date = parseDate(dateValue);
-    if (!date) return 0;
-    const now = new Date();
-    const diff = now - date;
-    const hrs = diff / (1000 * 60 * 60);
-    return Math.max(0, hrs);
-}
 
-function calcBusinessDays(startDate, endDate) {
-    // Optimized business days calculation (fast even for old tickets)
-    if (!startDate || !endDate) return 0;
-    
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    
-    if (start > end) return 0;
-    
-    const millisecondsPerDay = 24 * 60 * 60 * 1000;
-    const totalDays = Math.floor((end - start) / millisecondsPerDay);
-    
-    // Calculate full weeks
-    const fullWeeks = Math.floor(totalDays / 7);
-    const remainingDays = totalDays % 7;
-    
-    // Each full week has 5 business days
-    let businessDays = fullWeeks * 5;
-    
-    // Count remaining days
-    const startDayOfWeek = start.getDay();
-    for (let i = 0; i < remainingDays; i++) {
-        const currentDay = (startDayOfWeek + i) % 7;
-        // 0 = Sunday, 6 = Saturday
-        if (currentDay !== 0 && currentDay !== 6) {
-            businessDays++;
-        }
+function getSLARule(product, svc, pri) {
+    if (pri) {
+        if (product) { const r=IOT_SLA_RULES[product+'|'+pri]; if(r) return r; }
+        if (svc)     { const r=IOT_SLA_RULES['SVC:'+svc+'|'+pri]; if(r) return r; }
+        const d=PRIORITY_DEFAULTS[pri]; if(d) return d;
     }
-    
-    return businessDays * 24; // Return hours (business days * 24)
+    return {h:48,s:'24x7',hpd:24,es:false,eu:false};
 }
 
-function calcBusinessAge(dateValue, resolvedDate) {
-    const startDate = parseDate(dateValue);
-    if (!startDate) return 0;
-    
-    // Use resolved date if available, otherwise current date
-    const endDate = resolvedDate ? parseDate(resolvedDate) : new Date();
-    if (!endDate) return 0;
-    
-    return calcBusinessDays(startDate, endDate);
-}
-
-function getSLA(row) {
-    // If we have a calculated SLA status, use it
-    if (row._calculatedSLA) {
-        return row._calculatedSLA;
+function calcScheduleAge(start, end, hpd, es, eu) {
+    if (!start || !end || start >= end) return 0;
+    if (!es && !eu && hpd === 24) return Math.max(0,(end-start)/3600000);
+    const MS_DAY = 86400000;
+    const totalDays = Math.floor((end-start)/MS_DAY);
+    const fullWeeks = Math.floor(totalDays/7);
+    const rem = totalDays % 7;
+    const wpw = 7 - (es?1:0) - (eu?1:0);
+    let bdays = fullWeeks * wpw;
+    const sd = start.getDay();
+    for (let i=0;i<rem;i++) {
+        const d=(sd+i)%7;
+        if (eu && d===0) continue;
+        if (es && d===6) continue;
+        bdays++;
     }
-    
-    // Otherwise, try to read from the Excel column
-    if (!columnMappings.slaStatus) return 'Unknown';
-    const value = row[columnMappings.slaStatus];
-    if (!value || value === '') return 'Unknown';
-    return String(value).trim();
+    return bdays * hpd;
+}
+
+function detectHoldUnit(data, col) {
+    if (!col) return 'minutes';
+    let vals=[];
+    for (let i=0;i<Math.min(50,data.length);i++) { const v=parseFloat(data[i][col]); if(!isNaN(v)&&v>0) vals.push(v); }
+    if (!vals.length) return 'minutes';
+    return (vals.reduce((a,b)=>a+b,0)/vals.length/60 > 720) ? 'seconds' : 'minutes';
+}
+
+function enrichData(data, mappings) {
+    console.log(`💾 enrichData: ${data.length} rows | submit=${mappings.submitDate||'?'} | resolved=${mappings.resolvedDate||'?'} | hold=${mappings.totalTimeOnHold||'none'}`);
+    const holdUnit = detectHoldUnit(data, mappings.totalTimeOnHold);
+    let ok=0,fail=0,holdApplied=0;
+
+    const enriched = data.map((row,idx) => {
+        const result = {...row};
+        const pri  = mappings.priority     ? String(row[mappings.priority]     ||'').trim() : '';
+        const prod = mappings.productName  ? String(row[mappings.productName]  ||'').trim() : '';
+        const svc  = mappings.productTier3 ? String(row[mappings.productTier3] ||'').trim() : '';
+        const rule = getSLARule(prod||null, svc||null, pri||null);
+        result._slaH = rule.h;
+        result._slaS = rule.s;
+
+        if (mappings.submitDate && row[mappings.submitDate]) {
+            const sd = parseDate(row[mappings.submitDate]);
+            if (sd) {
+                ok++;
+                const rd = mappings.resolvedDate && row[mappings.resolvedDate] ? parseDate(row[mappings.resolvedDate]) : null;
+                result._submitDate = sd; result._resolvedDate = rd;
+                const rawAge = calcScheduleAge(sd, rd||new Date(), rule.hpd, rule.es, rule.eu);
+                let holdHrs=0;
+                if (mappings.totalTimeOnHold && row[mappings.totalTimeOnHold]) {
+                    const hv=parseFloat(row[mappings.totalTimeOnHold]);
+                    if (!isNaN(hv)&&hv>0) { holdHrs=holdUnit==='seconds'?hv/3600:hv/60; holdApplied++; }
+                }
+                result._rawAge=rawAge; result._holdHrs=holdHrs;
+                result._ageToUse=Math.max(0,rawAge-holdHrs);
+                if (ok<=3) console.log(`✅ R${idx+1}: "${prod}"|"${pri}" → ${rule.s}(${rule.hpd}h/d es=${rule.es} eu=${rule.eu}) rawAge=${(rawAge/24).toFixed(1)}d hold=${(holdHrs/24).toFixed(1)}d net=${(result._ageToUse/24).toFixed(1)}d target=${rule.h}h`);
+            } else { fail++; result._ageToUse=0; if(fail<=3) console.warn(`⚠️ R${idx+1}: bad date "${row[mappings.submitDate]}"`); }
+        } else if (mappings.age && row[mappings.age]) {
+            result._ageToUse=Math.max(0,parseFloat(row[mappings.age])||0);
+        } else { result._ageToUse=0; }
+
+        result._calculatedSLA = calculateSLA(result);
+        return result;
+    });
+
+    const dist={};
+    enriched.forEach(r=>{const s=r._calculatedSLA||'?'; dist[s]=(dist[s]||0)+1;});
+    console.log(`\n✅ parsed=${ok} fail=${fail} hold=${holdApplied}`);
+    console.log('📊 SLA:', Object.entries(dist).map(([k,v])=>`${k}:${v}(${((v/data.length)*100).toFixed(1)}%)`).join(' | '));
+    return enriched;
 }
 
 function calculateSLA(row) {
-    // SLA RULES:
-    // - Start: Submit Date
-    // - Stop: Resolved Date (or current if not resolved)
-    // - Pause Statuses: Client Hold, Client Action Required, Pending on client, 
-    //   Awaiting Customer, Monitoring Incident, Internal to Etisalat, Future Enhancement
-    // - Hours: Business Days Only (exclude weekends)
-    
-    const ageHours = row._ageToUse; // Age in business hours
-    
-    // Define pause statuses (case-insensitive matching)
-    const pauseStatuses = [
-        'client hold',
-        'client action required',
-        'pending on client',
-        'awaiting customer',
-        'monitoring incident',
-        'internal to etisalat',
-        'future enhancement'
-    ];
-    
-    // Step 1: Check if ticket is currently in a pause status
-    let isPaused = false;
+    const PAUSE=['client hold','client action required','pending on client',
+                 'awaiting customer','monitoring incident','internal to etisalat','future enhancement'];
     if (columnMappings.statusReason && row[columnMappings.statusReason]) {
-        const statusReason = String(row[columnMappings.statusReason]).toLowerCase().trim();
-        isPaused = pauseStatuses.some(pause => statusReason.includes(pause));
-        
-        if (isPaused && Math.random() < 0.01) { // Log 1% of paused tickets
-            console.log(`⏸️ PAUSED: Status="${row[columnMappings.statusReason]}" → SLA MET`);
-        }
+        const sr=String(row[columnMappings.statusReason]).toLowerCase();
+        if (PAUSE.some(p=>sr.includes(p))) return 'SLA MET';
     }
-    
-    // Step 2: Check Breach Exception column
     if (columnMappings.breachException && row[columnMappings.breachException]) {
-        const exception = String(row[columnMappings.breachException]).toUpperCase();
-        if (exception === 'YES') {
-            isPaused = true;
-            if (Math.random() < 0.01) { // Log 1% of exceptions
-                console.log(`⏸️ EXCEPTION: Breach Exception=YES → SLA MET`);
-            }
-        }
+        if (String(row[columnMappings.breachException]).toUpperCase()==='YES') return 'SLA MET';
     }
-    
-    // If currently paused, SLA is automatically MET
-    if (isPaused) {
-        return 'SLA MET';
-    }
-    
-    // Step 3: Determine SLA Target (using IOT rules)
-    let slaTarget = null;
-    
-    // Try to get priority
-    let priority = null;
-    if (columnMappings.priority && row[columnMappings.priority]) {
-        priority = String(row[columnMappings.priority]).trim();
-    }
-    
-    // Method A: Try Product Name + Priority lookup
-    if (priority && columnMappings.productName && row[columnMappings.productName]) {
-        const productName = String(row[columnMappings.productName]).trim();
-        const lookupKey = `${productName}|${priority}`;
-        if (SLA_LOOKUP_TABLE.product_priority_rules[lookupKey]) {
-            slaTarget = SLA_LOOKUP_TABLE.product_priority_rules[lookupKey];
-        }
-    }
-    
-    // Method B: Try Product Tier 3 (Service) + Priority lookup
-    if (!slaTarget && priority && columnMappings.productTier3 && row[columnMappings.productTier3]) {
-        const productTier3 = String(row[columnMappings.productTier3]).trim();
-        const lookupKey = `${productTier3}|${priority}`;
-        if (SLA_LOOKUP_TABLE.service_priority_rules[lookupKey]) {
-            slaTarget = SLA_LOOKUP_TABLE.service_priority_rules[lookupKey];
-        }
-    }
-    
-    // Method C: Use priority default
-    if (!slaTarget && priority && SLA_LOOKUP_TABLE.priority_defaults[priority]) {
-        slaTarget = SLA_LOOKUP_TABLE.priority_defaults[priority];
-    }
-    
-    // Method D: Use SLA TARGET column from Excel
-    if (!slaTarget && columnMappings.slaTarget && row[columnMappings.slaTarget]) {
-        const excelTarget = parseFloat(row[columnMappings.slaTarget]);
-        if (!isNaN(excelTarget)) {
-            slaTarget = excelTarget;
-        }
-    }
-    
-    // Method E: Default fallback
-    if (!slaTarget) {
-        slaTarget = 48; // Default 48 hours
-    }
-    
-    // Debug log for first few tickets
-    if (Math.random() < 0.005) { // Log 0.5% of tickets
-        console.log(`🎯 SLA Check: Age=${(ageHours/24).toFixed(1)}d, Target=${(slaTarget/24).toFixed(1)}d, Priority=${priority}`);
-    }
-    
-    // Step 4: Compare age vs target
-    if (ageHours > slaTarget) {
-        return 'SLA BREACHED';
-    } else if (ageHours > (slaTarget * 0.75)) {
-        return 'AT RISK'; // 75% of SLA consumed
-    } else {
-        return 'SLA MET';
-    }
+    const age=row._ageToUse||0, target=row._slaH||48;
+    if (age>target)        return 'SLA BREACHED';
+    if (age>target*0.75)   return 'AT RISK';
+    return 'SLA MET';
 }
 
 function detectColumns(data) {
@@ -797,102 +723,6 @@ function detectHoldTimeUnit(data, mappings) {
     return 'minutes';
 }
 
-function enrichData(data, mappings) {
-    console.log('💾 Enriching data...');
-    console.log(`📋 Total rows to process: ${data.length}`);
-    console.log(`📅 Submit Date column: ${mappings.submitDate || 'NOT FOUND'}`);
-    console.log(`📅 Resolved Date column: ${mappings.resolvedDate || 'NOT FOUND'}`);
-    console.log(`⏸️  Total Time On Hold column: ${mappings.totalTimeOnHold || 'NOT FOUND'}`);
-    
-    // Auto-detect hold time unit
-    const holdTimeUnit = detectHoldTimeUnit(data, mappings);
-    
-    let dateParseSuccessCount = 0;
-    let dateParseFailCount = 0;
-    let holdTimeUsedCount = 0;
-    
-    const enriched = data.map((row, index) => {
-        const result = {...row};
-        
-        if (mappings.submitDate && row[mappings.submitDate]) {
-            result._submitDate = parseDate(row[mappings.submitDate]);
-            
-            if (result._submitDate) {
-                dateParseSuccessCount++;
-                
-                // Get resolved date if available
-                const resolvedDate = mappings.resolvedDate && row[mappings.resolvedDate] 
-                    ? parseDate(row[mappings.resolvedDate]) 
-                    : null;
-                result._resolvedDate = resolvedDate;
-                
-                // Calculate age in BUSINESS DAYS (exclude weekends)
-                const rawBusinessAge = calcBusinessAge(row[mappings.submitDate], resolvedDate);
-                
-                // Subtract Total Time On Hold if available
-                let holdTimeHours = 0;
-                if (mappings.totalTimeOnHold && row[mappings.totalTimeOnHold]) {
-                    const holdRaw = parseFloat(row[mappings.totalTimeOnHold]);
-                    if (!isNaN(holdRaw) && holdRaw > 0) {
-                        holdTimeHours = holdTimeUnit === 'seconds' 
-                            ? holdRaw / 3600   // seconds → hours
-                            : holdRaw / 60;    // minutes → hours
-                        holdTimeUsedCount++;
-                    }
-                }
-                
-                // Net SLA Age = Business Days Age - Hold Time
-                result._holdTimeHours = holdTimeHours;
-                result._rawBusinessAge = rawBusinessAge;
-                result._calculatedAge = Math.max(0, rawBusinessAge - holdTimeHours);
-                result._ageToUse = result._calculatedAge;
-                
-                // Log first 3 rows
-                if (dateParseSuccessCount <= 3) {
-                    console.log(`✅ Row ${index + 1}:`);
-                    console.log(`   Submit: ${result._submitDate.toISOString().split('T')[0]}`);
-                    console.log(`   Business Days Age: ${(rawBusinessAge/24).toFixed(1)} days`);
-                    console.log(`   Hold Time: ${holdTimeHours.toFixed(1)} hours (${(holdTimeHours/24).toFixed(1)} days)`);
-                    console.log(`   Net SLA Age: ${(result._ageToUse/24).toFixed(1)} days`);
-                }
-            } else {
-                dateParseFailCount++;
-                result._ageToUse = 0;
-                if (dateParseFailCount <= 3) {
-                    console.warn(`⚠️ Row ${index + 1}: Date parse failed - "${row[mappings.submitDate]}"`);
-                }
-            }
-        } else if (mappings.age && row[mappings.age]) {
-            const existingAge = parseFloat(row[mappings.age]);
-            result._ageToUse = !isNaN(existingAge) ? existingAge : 0;
-        } else {
-            result._ageToUse = 0;
-        }
-        
-        // Calculate SLA status automatically
-        result._calculatedSLA = calculateSLA(result);
-        
-        return result;
-    });
-    
-    console.log(`\n✅ Processing Summary:`);
-    console.log(`   Dates parsed: ${dateParseSuccessCount}/${data.length}`);
-    console.log(`   Dates failed: ${dateParseFailCount}/${data.length}`);
-    console.log(`   Hold time applied: ${holdTimeUsedCount}/${data.length}`);
-    
-    // SLA status distribution
-    const slaCount = {};
-    enriched.forEach(r => {
-        const s = r._calculatedSLA || 'Unknown';
-        slaCount[s] = (slaCount[s] || 0) + 1;
-    });
-    console.log(`\n📊 SLA Status Distribution:`);
-    Object.entries(slaCount).forEach(([s, c]) => {
-        console.log(`   ${s}: ${c} (${((c/data.length)*100).toFixed(1)}%)`);
-    });
-    
-    return enriched;
-}
 
 function getAge(row) {
     return row._ageToUse || 0;
