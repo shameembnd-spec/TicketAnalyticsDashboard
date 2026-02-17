@@ -728,6 +728,14 @@ function getAge(row) {
     return row._ageToUse || 0;
 }
 
+function getSLA(row) {
+    return row._calculatedSLA || calculateSLA(row);
+}
+
+function getAge(row) {
+    return row._ageToUse || 0;
+}
+
 function showTab(tabName) {
     document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
