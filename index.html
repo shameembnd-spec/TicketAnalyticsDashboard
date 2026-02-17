@@ -692,7 +692,19 @@ function enrichData(data, mappings) {
                 let holdHrs=0;
                 if (mappings.totalTimeOnHold && row[mappings.totalTimeOnHold]) {
                     const hv=parseFloat(row[mappings.totalTimeOnHold]);
-                    if (!isNaN(hv)&&hv>0) { holdHrs=holdUnit==='seconds'?hv/3600:hv/60; holdApplied++; }
+                    if (!isNaN(hv)&&hv>0) {
+                        holdHrs=holdUnit==='seconds'?hv/3600:hv/60;
+                        // Cap hold time at raw age — cannot be on hold longer than ticket was open
+                        const cappedHoldHrs = Math.min(holdHrs, rawAge);
+                        if (holdHrs > rawAge) {
+                            // Flag data anomaly (Remedy sometimes stores stale/incorrect hold time)
+                            result._holdAnomaly = true;
+                            result._holdRawHrs  = holdHrs;  // original uncapped value
+                            console.warn(`⚠️ Hold time anomaly R${idx+1}: holdHrs=${holdHrs.toFixed(1)} > rawAge=${rawAge.toFixed(1)} → capped to ${cappedHoldHrs.toFixed(1)}`);
+                        }
+                        holdHrs = cappedHoldHrs;
+                        holdApplied++;
+                    }
                 }
                 result._rawAge=rawAge; result._holdHrs=holdHrs;
                 result._ageToUse=Math.max(0,rawAge-holdHrs);
@@ -748,11 +760,7 @@ function detectColumns(data) {
             const found = cols.find(c => {
                 const colLower = c.toLowerCase();
                 const patternLower = p.toLowerCase();
-                return colLower.includes(patternLower) && 
-                       !colLower.includes('request') && 
-                       !colLower.includes(' id') &&
-                       !colLower.includes('_id') &&
-                       !colLower.match(/\d{5,}/);
+                return colLower.includes(patternLower) && !colLower.match(/\d{5,}/);
             });
             if (found) {
                 console.log(`✅ Found partial match: "${found}" for pattern "${p}"`);
@@ -764,23 +772,23 @@ function detectColumns(data) {
     }
     
     const mapping = {
-        status: find(['status', 'ticket status']),
+        status: find(['ticket status', 'status']),
         priority: find(['priority', 'urgency']),
-        service: find(['service', 'service name', 'service type']),
-        assignedGroup: find(['service group name', 'service group', 'assigned group', 'group', 'team', 'assignee']),
+        service: find(['service name', 'service type', 'service']),
+        assignedGroup: find(['service group name', 'service group', 'assigned group', 'support group', 'group', 'team', 'assignee']),
         impact: find(['impact']),
         slaStatus: find(['sla status', 'slm real time status']),
         slaTarget: find(['sla target']),
-        age: find(['age', 'hrs round off', 'ticket age']),
-        statusReason: find(['status_reason', 'status reason', 'status_reason_hidden']),
-        submitDate: find(['submit date', 'submitted date', 'created date', 'reported date']),
-        resolvedDate: find(['resolved date', 'last resolved date', 'resolution date', 'closed date']),
-        incidentId: find(['incident id', 'incident number', 'ticket id']),
+        age: find(['hrs round off', 'ticket age', 'age']),
+        statusReason: find(['status_reason_hidden', 'status_reason', 'status reason']),
+        submitDate: find(['submit date', 'submitted date', 'open time', 'created date', 'reported date', 'open date']),
+        resolvedDate: find(['last resolved date', 'resolved date', 'resolution date', 'closed date', 'close date']),
+        incidentId: find(['incident number', 'incident id', 'incident_id', 'incident #', 'ticket number', 'ticket id', 'ticket_id', 'case id', 'case number', 'request id', 'call id']),
         company: find(['company', 'company name', 'customer', 'customer name', 'organization', 'org name']),
         breachException: find(['breach exception']),
         productName: find(['product name', 'product']),
         productTier3: find(['product categorization tier 3', 'product cat tier 3']),
-        totalTimeOnHold: find(['total time on hold', 'time on hold', 'hold time', 'to_pendingtime'])
+        totalTimeOnHold: find(['total time on hold', 'time on hold', 'to_pendingtime', 'hold time', 'pending time'])
     };
     
     console.log('📊 Column mapping result:', mapping);
@@ -901,9 +909,14 @@ function buildDDCols(rows) {
     const cols = [];
     const add = (label, getter) => cols.push({ label, getter });
 
-    // Incident ID
+    // Incident ID — try detected column, then first raw column as fallback
     const idCol = columnMappings.incidentId;
-    add('Incident ID', r => idCol ? r[idCol] : r._incidentId || '');
+    const firstRawCol = Object.keys(rows[0] || {}).find(k => !k.startsWith('_'));
+    add('Incident ID', r => {
+        if (idCol && r[idCol]) return r[idCol];
+        if (firstRawCol && r[firstRawCol]) return r[firstRawCol];
+        return '';
+    });
     // Priority
     const priCol = columnMappings.priority;
     add('Priority', r => priCol ? r[priCol] : r._priority || '');
@@ -940,9 +953,23 @@ function buildDDCols(rows) {
         const a = r._ageToUse;
         return a != null ? (a/24).toFixed(1) : '';
     });
-    // Hold Time
+    // Hold Time - show both raw ITSM value and effective (capped) value used in SLA
     const holdCol = columnMappings.totalTimeOnHold;
-    if (holdCol) add('Hold Time (min)', r => r[holdCol] || 0);
+    if (holdCol) {
+        add('Hold (Used in SLA)', r => {
+            const effHrs = r._holdHrs || 0;
+            if (effHrs === 0) return r._holdAnomaly ? '⚠️ 0h (capped)' : '0h';
+            return `${effHrs.toFixed(1)}h (${(effHrs/24).toFixed(1)}d)`;
+        });
+        add('Hold (Raw ITSM)', r => {
+            const raw = parseFloat(r[holdCol]);
+            if (isNaN(raw) || raw === 0) return '0';
+            const rawHrs = (raw / 60).toFixed(1);
+            const rawDays = (raw / 60 / 24).toFixed(1);
+            const badge = r._holdAnomaly ? ' ⚠️ BAD DATA' : '';
+            return `${rawHrs}h (${rawDays}d)${badge}`;
+        });
+    }
     // SLA Target
     add('SLA Target (h)', r => r._slaH || '');
     // Schedule
@@ -976,6 +1003,13 @@ function formatDDCell(val, col) {
         if (pl === 'high')     return `<span class="dd-badge p2">🟠 High</span>`;
         if (pl === 'medium')   return `<span class="dd-badge p3">🔵 Medium</span>`;
         if (pl === 'low')      return `<span class="dd-badge p4">⚪ Low</span>`;
+    }
+    // Hold time anomaly warning
+    if (s.includes('⚠️ BAD DATA')) {
+        return s.replace('⚠️ BAD DATA', '<span style="color:#f87171;font-weight:600">⚠️ BAD DATA</span>');
+    }
+    if (s.includes('⚠️ 0h (capped)')) {
+        return s.replace('⚠️', '<span style="color:#fb923c">⚠️</span>');
     }
     // Age — colour code
     if (label.includes('net age (days)')) {
