@@ -115,9 +115,104 @@
             .widget-header { cursor: default; }
             .draggable-widget { page-break-inside: avoid; margin-bottom: 20px; border-color: #ccc; }
         }
+    /* ── DRILL-DOWN MODAL ── */
+    .drilldown-overlay {
+        display: none; position: fixed; inset: 0;
+        background: rgba(0,0,0,0.75); z-index: 9999;
+        align-items: flex-start; justify-content: center;
+        padding: 40px 20px; overflow-y: auto;
+    }
+    .drilldown-overlay.open { display: flex; }
+    .drilldown-modal {
+        background: #1a2035; border: 1px solid #334155;
+        border-radius: 14px; width: 100%; max-width: 1300px;
+        box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+        animation: slideUp .2s ease;
+    }
+    @keyframes slideUp { from { opacity:0; transform:translateY(30px); } to { opacity:1; transform:translateY(0); } }
+    .drilldown-header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 18px 24px; border-bottom: 1px solid #334155;
+    }
+    .drilldown-title { font-size: 1.1rem; font-weight: 600; color: #e2e8f0; }
+    .drilldown-subtitle { font-size: 0.8rem; color: #94a3b8; margin-top: 2px; }
+    .drilldown-close {
+        background: #334155; border: none; color: #e2e8f0;
+        width: 32px; height: 32px; border-radius: 50%; cursor: pointer;
+        font-size: 1rem; display: flex; align-items: center; justify-content: center;
+        transition: background .2s;
+    }
+    .drilldown-close:hover { background: #ef4444; }
+    .drilldown-toolbar {
+        padding: 12px 24px; display: flex; gap: 12px; align-items: center;
+        border-bottom: 1px solid #1e293b; flex-wrap: wrap;
+    }
+    .drilldown-search {
+        background: #0f172a; border: 1px solid #334155; border-radius: 8px;
+        padding: 7px 12px; color: #e2e8f0; font-size: 0.85rem; flex: 1; min-width: 200px;
+    }
+    .drilldown-search:focus { outline: none; border-color: #60a5fa; }
+    .drilldown-export {
+        background: #1d4ed8; border: none; color: #fff; padding: 7px 16px;
+        border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 500;
+        white-space: nowrap; transition: background .2s;
+    }
+    .drilldown-export:hover { background: #2563eb; }
+    .drilldown-count { font-size: 0.8rem; color: #94a3b8; white-space: nowrap; }
+    .drilldown-table-wrap { overflow-x: auto; max-height: 65vh; }
+    .drilldown-table {
+        width: 100%; border-collapse: collapse; font-size: 0.82rem;
+    }
+    .drilldown-table th {
+        background: #0f172a; color: #94a3b8; font-weight: 600;
+        padding: 10px 14px; text-align: left; position: sticky; top: 0;
+        border-bottom: 1px solid #334155; white-space: nowrap; cursor: pointer;
+        user-select: none;
+    }
+    .drilldown-table th:hover { color: #60a5fa; }
+    .drilldown-table td {
+        padding: 9px 14px; border-bottom: 1px solid #1e293b; color: #e2e8f0;
+        max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .drilldown-table tr:hover td { background: rgba(96,165,250,0.06); }
+    .dd-badge { padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+    .dd-badge.breached { background: rgba(248,113,113,0.2); color: #f87171; }
+    .dd-badge.met     { background: rgba(52,211,153,0.2); color: #34d399; }
+    .dd-badge.risk    { background: rgba(251,191,36,0.2); color: #fbbf24; }
+    .dd-badge.p1 { background: rgba(248,113,113,0.15); color: #f87171; }
+    .dd-badge.p2 { background: rgba(251,191,36,0.15); color: #fbbf24; }
+    .dd-badge.p3 { background: rgba(96,165,250,0.15); color: #60a5fa; }
+    .dd-badge.p4 { background: rgba(148,163,184,0.15); color: #94a3b8; }
+    .kpi-card { cursor: pointer; }
+    .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(96,165,250,0.2); border-color: #60a5fa !important; }
+    .metric-item { cursor: pointer; }
+    .metric-item:hover { background: rgba(96,165,250,0.08); border-radius: 8px; }
     </style>
 </head>
 <body>
+<!-- ── DRILL-DOWN MODAL ── -->
+<div class="drilldown-overlay" id="drilldownOverlay" onclick="closeDrilldown(event)">
+  <div class="drilldown-modal" onclick="event.stopPropagation()">
+    <div class="drilldown-header">
+      <div>
+        <div class="drilldown-title" id="ddTitle">Ticket Details</div>
+        <div class="drilldown-subtitle" id="ddSubtitle"></div>
+      </div>
+      <button class="drilldown-close" onclick="closeDrilldown()">✕</button>
+    </div>
+    <div class="drilldown-toolbar">
+      <input class="drilldown-search" id="ddSearch" placeholder="🔍 Search tickets..." oninput="filterDDTable()">
+      <span class="drilldown-count" id="ddCount"></span>
+      <button class="drilldown-export" onclick="exportDDToCSV()">⬇ Export CSV</button>
+    </div>
+    <div class="drilldown-table-wrap">
+      <table class="drilldown-table" id="ddTable">
+        <thead id="ddThead"></thead>
+        <tbody id="ddTbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
     <div class="container">
         <div class="header">
             <h1>📊 Ticket Analytics Dashboard</h1>
@@ -732,6 +827,213 @@ function getSLA(row) {
     return row._calculatedSLA || calculateSLA(row);
 }
 
+// ── DRILL-DOWN ENGINE ─────────────────────────────────────────────────────────
+
+let _ddRows = [];      // current filtered rows
+let _ddAllRows = [];   // all rows for the current drill-down
+let _ddSort = { col: null, asc: true };
+
+// Key columns to show (auto-detected at render time)
+const DD_COLS_PRIORITY = [
+    { key: '_incidentId',  label: 'Incident ID'   },
+    { key: '_priority',    label: 'Priority'       },
+    { key: '_service',     label: 'Service'        },
+    { key: '_status',      label: 'Status'         },
+    { key: '_statusReason',label: 'Status Reason'  },
+    { key: '_submitDate',  label: 'Submit Date',   isDate: true },
+    { key: '_ageToUse',    label: 'Net Age (hrs)'  },
+    { key: '_slaH',        label: 'SLA Target (h)' },
+    { key: '_calculatedSLA', label: 'SLA Status'   },
+    { key: '_schedule',    label: 'Schedule'       },
+];
+
+function openDrilldown(rows, title, subtitle) {
+    _ddAllRows = rows;
+    _ddRows    = rows;
+    document.getElementById('ddTitle').textContent    = title;
+    document.getElementById('ddSubtitle').textContent = subtitle || `${rows.length.toLocaleString()} tickets`;
+    document.getElementById('ddSearch').value = '';
+    _ddSort = { col: null, asc: true };
+    renderDDTable(_ddRows);
+    document.getElementById('drilldownOverlay').classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeDrilldown(e) {
+    if (e && e.target !== document.getElementById('drilldownOverlay')) return;
+    document.getElementById('drilldownOverlay').classList.remove('open');
+    document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { document.getElementById('drilldownOverlay').classList.remove('open'); document.body.style.overflow=''; }});
+
+function renderDDTable(rows) {
+    document.getElementById('ddCount').textContent = `${rows.length.toLocaleString()} tickets`;
+
+    // Build display columns from actual data
+    const cols = buildDDCols(rows);
+
+    // Header
+    const thead = document.getElementById('ddThead');
+    thead.innerHTML = '<tr>' + cols.map((c,i) =>
+        `<th onclick="sortDDTable(${i})" title="Sort by ${c.label}">${c.label} <span style="color:#60a5fa;font-size:0.7rem">${_ddSort.col===i ? (_ddSort.asc?'▲':'▼') : '⇅'}</span></th>`
+    ).join('') + '</tr>';
+
+    // Body (cap at 2000 rows for performance)
+    const visible = rows.slice(0, 2000);
+    const tbody = document.getElementById('ddTbody');
+    tbody.innerHTML = visible.map(row => {
+        const cells = cols.map(c => {
+            let val = getCellVal(row, c);
+            return `<td title="${String(val).replace(/"/g,'&quot;')}">${formatDDCell(val, c)}</td>`;
+        }).join('');
+        return `<tr>${cells}</tr>`;
+    }).join('');
+
+    if (rows.length > 2000) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td colspan="${cols.length}" style="text-align:center;padding:12px;color:#94a3b8">Showing first 2,000 of ${rows.length.toLocaleString()} tickets. Use search to narrow results or export CSV for full data.</td>`;
+        tbody.appendChild(tr);
+    }
+}
+
+function buildDDCols(rows) {
+    // Use important mapped columns + any raw columns from Excel
+    const cols = [];
+    const add = (label, getter) => cols.push({ label, getter });
+
+    // Incident ID
+    const idCol = columnMappings.incidentId;
+    add('Incident ID', r => idCol ? r[idCol] : r._incidentId || '');
+    // Priority
+    const priCol = columnMappings.priority;
+    add('Priority', r => priCol ? r[priCol] : r._priority || '');
+    // Service
+    const svcCol = columnMappings.service;
+    add('Service', r => svcCol ? r[svcCol] : '');
+    // Status
+    const statCol = columnMappings.status;
+    add('Status', r => statCol ? r[statCol] : '');
+    // Status Reason
+    const srCol = columnMappings.statusReason;
+    if (srCol) add('Status Reason', r => r[srCol] || '');
+    // Product
+    const prodCol = columnMappings.productName;
+    if (prodCol) add('Product', r => r[prodCol] || '');
+    // Submit Date
+    const sdCol = columnMappings.submitDate;
+    add('Submit Date', r => {
+        const d = r._submitDate;
+        return d ? d.toLocaleDateString() : (sdCol ? r[sdCol] : '');
+    });
+    // Resolved Date
+    const rdCol = columnMappings.resolvedDate;
+    if (rdCol) add('Resolved Date', r => {
+        const d = r._resolvedDate;
+        return d ? d.toLocaleDateString() : (r[rdCol] || '');
+    });
+    // Net Age
+    add('Net Age (hrs)', r => {
+        const a = r._ageToUse;
+        return a != null ? Math.round(a) : '';
+    });
+    add('Net Age (days)', r => {
+        const a = r._ageToUse;
+        return a != null ? (a/24).toFixed(1) : '';
+    });
+    // Hold Time
+    const holdCol = columnMappings.totalTimeOnHold;
+    if (holdCol) add('Hold Time (min)', r => r[holdCol] || 0);
+    // SLA Target
+    add('SLA Target (h)', r => r._slaH || '');
+    // Schedule
+    add('Schedule', r => r._slaS || '');
+    // SLA Status
+    add('SLA Status', r => r._calculatedSLA || '');
+
+    return cols.map(c => ({ ...c, isFn: true }));
+}
+
+function getCellVal(row, col) {
+    if (col.isFn) return col.getter(row);
+    return row[col.key] != null ? row[col.key] : '';
+}
+
+function formatDDCell(val, col) {
+    const s = String(val ?? '');
+    const label = (col.label || '').toLowerCase();
+
+    // SLA Status badge
+    if (label === 'sla status') {
+        const sl = s.toLowerCase();
+        if (sl.includes('breach')) return `<span class="dd-badge breached">⛔ BREACHED</span>`;
+        if (sl.includes('risk'))   return `<span class="dd-badge risk">⚠️ AT RISK</span>`;
+        if (sl.includes('met'))    return `<span class="dd-badge met">✅ MET</span>`;
+    }
+    // Priority badge
+    if (label === 'priority') {
+        const pl = s.toLowerCase();
+        if (pl === 'critical') return `<span class="dd-badge p1">🔴 Critical</span>`;
+        if (pl === 'high')     return `<span class="dd-badge p2">🟠 High</span>`;
+        if (pl === 'medium')   return `<span class="dd-badge p3">🔵 Medium</span>`;
+        if (pl === 'low')      return `<span class="dd-badge p4">⚪ Low</span>`;
+    }
+    // Age — colour code
+    if (label.includes('net age (days)')) {
+        const n = parseFloat(s);
+        if (!isNaN(n)) {
+            const color = n > 180 ? '#f87171' : n > 75 ? '#fb923c' : n > 30 ? '#fbbf24' : '#34d399';
+            return `<span style="color:${color};font-weight:600">${s}</span>`;
+        }
+    }
+    return s.length > 60 ? s.slice(0,57) + '…' : s;
+}
+
+function filterDDTable() {
+    const q = document.getElementById('ddSearch').value.toLowerCase();
+    _ddRows = q
+        ? _ddAllRows.filter(r => {
+            return Object.values(r).some(v => String(v ?? '').toLowerCase().includes(q)) ||
+                   (r._calculatedSLA||'').toLowerCase().includes(q);
+        })
+        : _ddAllRows;
+    _ddSort = { col: null, asc: true };
+    renderDDTable(_ddRows);
+}
+
+function sortDDTable(colIdx) {
+    const asc = _ddSort.col === colIdx ? !_ddSort.asc : true;
+    _ddSort = { col: colIdx, asc };
+    const cols = buildDDCols(_ddRows);
+    const col = cols[colIdx];
+    _ddRows = [..._ddRows].sort((a, b) => {
+        let av = getCellVal(a, col), bv = getCellVal(b, col);
+        const an = parseFloat(av), bn = parseFloat(bv);
+        if (!isNaN(an) && !isNaN(bn)) return asc ? an - bn : bn - an;
+        return asc ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+    });
+    renderDDTable(_ddRows);
+}
+
+function exportDDToCSV() {
+    if (!_ddAllRows.length) return;
+    const cols = buildDDCols(_ddAllRows);
+    const header = cols.map(c => `"${c.label}"`).join(',');
+    const rowsCSV = _ddAllRows.map(r =>
+        cols.map(c => {
+            const v = String(getCellVal(r, c) ?? '').replace(/"/g, '""');
+            return `"${v}"`;
+        }).join(',')
+    );
+    const csv = [header, ...rowsCSV].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `tickets_${document.getElementById('ddTitle').textContent.replace(/\s+/g,'_')}.csv`;
+    a.click();
+}
+
+// ── END DRILL-DOWN ENGINE ─────────────────────────────────────────────────────
+
 function getAge(row) {
     return row._ageToUse || 0;
 }
@@ -1020,14 +1322,14 @@ function updateKPIs(data, sla) {
     const kpiGrid = document.getElementById('kpiGrid');
     if (kpiGrid) {
         kpiGrid.innerHTML = `
-            <div class="kpi-card"><div class="kpi-label">Total</div><div class="kpi-value">${total.toLocaleString()}</div></div>
-            <div class="kpi-card critical"><div class="kpi-label">SLA Breached</div><div class="kpi-value">${breached.toLocaleString()}</div><div class="kpi-subtitle">Rate: ${rate}%</div></div>
-            <div class="kpi-card success"><div class="kpi-label">SLA Met</div><div class="kpi-value">${met.toLocaleString()}</div></div>
-            <div class="kpi-card warning"><div class="kpi-label">At Risk (3-7d)</div><div class="kpi-value">${atRisk.toLocaleString()}</div></div>
-            <div class="kpi-card"><div class="kpi-label">Avg Age</div><div class="kpi-value">${avgAge}</div></div>
-            <div class="kpi-card"><div class="kpi-label">Max Age</div><div class="kpi-value">${maxAge}</div></div>
-            <div class="kpi-card warning"><div class="kpi-label">>75 Days</div><div class="kpi-value">${over75.toLocaleString()}</div></div>
-            <div class="kpi-card critical"><div class="kpi-label">🚨 >180 Days</div><div class="kpi-value">${aging180.toLocaleString()}</div></div>
+            <div class="kpi-card" onclick="openDrilldown(filteredData,'All Tickets','Complete ticket list')"><div class="kpi-label">Total</div><div class="kpi-value">${total.toLocaleString()}</div></div>
+            <div class="kpi-card critical" onclick="openDrilldown(filteredData.filter(r=>getSLA(r).toLowerCase().includes('breach')),'SLA Breached','Tickets that exceeded their SLA target')"><div class="kpi-label">SLA Breached</div><div class="kpi-value">${breached.toLocaleString()}</div><div class="kpi-subtitle">Rate: ${rate}%</div></div>
+            <div class="kpi-card success" onclick="openDrilldown(filteredData.filter(r=>getSLA(r).toLowerCase().includes('met')&&!getSLA(r).toLowerCase().includes('breach')),'SLA Met','Tickets within SLA target')"><div class="kpi-label">SLA Met</div><div class="kpi-value">${met.toLocaleString()}</div></div>
+            <div class="kpi-card warning" onclick="openDrilldown(filteredData.filter(r=>getSLA(r).toLowerCase().includes('risk')),'At Risk','Tickets at 75-100% of SLA target')"><div class="kpi-label">At Risk (3-7d)</div><div class="kpi-value">${atRisk.toLocaleString()}</div></div>
+            <div class="kpi-card" onclick="openDrilldown(filteredData,'All Tickets (sorted by age)','Click Net Age column header to sort')"><div class="kpi-label">Avg Age</div><div class="kpi-value">${avgAge}</div></div>
+            <div class="kpi-card" onclick="openDrilldown(filteredData,'All Tickets (sorted by age)','Click Net Age column header to sort')"><div class="kpi-label">Max Age</div><div class="kpi-value">${maxAge}</div></div>
+            <div class="kpi-card warning" onclick="openDrilldown(filteredData.filter(r=>getAge(r)/24>75),'Tickets Over 75 Days','Aged tickets exceeding 75 business days')"><div class="kpi-label">>75 Days</div><div class="kpi-value">${over75.toLocaleString()}</div></div>
+            <div class="kpi-card critical" onclick="openDrilldown(filteredData.filter(r=>getAge(r)/24>180),'🚨 Tickets Over 180 Days','Critical aging — exceeded 180 business days')"><div class="kpi-label">🚨 >180 Days</div><div class="kpi-value">${aging180.toLocaleString()}</div></div>
         `;
     }
 }
@@ -1061,9 +1363,13 @@ function updateServiceHealth(data, svc) {
     }).sort((a, b) => b.count - a.count).slice(0, 10);
     
     let html = '';
+    window._serviceTicketCache = {};
     services.forEach(s => {
+        const svcRows = data.filter(r => String(r[columnMappings.service] || '').trim() === s.service);
+        window._serviceTicketCache[s.service] = svcRows;
+        const eid = 'svc_' + s.service.replace(/[^a-z0-9]/gi,'_');
         html += `
-            <div class="metric-item">
+            <div class="metric-item" id="${eid}" style="cursor:pointer" onclick="openDrilldown(window._serviceTicketCache['${s.service.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}'], '${s.service.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}', '${s.count} tickets • Breach rate: ${s.rate}%')">
                 <div class="metric-item-label">${s.service}</div>
                 <div class="metric-item-value">${s.count.toLocaleString()}</div>
                 <div style="margin-top:8px">
@@ -1203,8 +1509,12 @@ function updateServicesTable(data, serviceCounts) {
     
     const tbody = document.getElementById('servicesTableBody');
     if (tbody) {
+        window._serviceTableCache = {};
+        services.forEach(s => {
+            window._serviceTableCache[s.service] = data.filter(r => String(r[columnMappings.service] || '').trim() === s.service);
+        });
         tbody.innerHTML = services.map(s => `
-            <tr>
+            <tr style="cursor:pointer" onclick="openDrilldown(window._serviceTableCache['${s.service.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}'], '${s.service.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}', '${s.count} tickets | Breach: ${s.rate}%')" title="Click to see tickets for ${s.service}">
                 <td>${s.service}</td>
                 <td style="color:#60a5fa;font-weight:600">${s.count.toLocaleString()}</td>
                 <td style="color:#fb923c;font-weight:600">${s.pct}%</td>
@@ -1239,8 +1549,12 @@ function updateTeamPerformance(data, groupCounts) {
     
     const tbody = document.getElementById('teamPerformanceBody');
     if (tbody) {
+        window._teamTableCache = {};
+        teams.forEach(t => {
+            window._teamTableCache[t.team] = data.filter(r => String(r[columnMappings.assignedGroup] || '').trim() === t.team);
+        });
         tbody.innerHTML = teams.map(t => `
-            <tr>
+            <tr style="cursor:pointer" onclick="openDrilldown(window._teamTableCache['${t.team.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}'], '${t.team.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}', '${t.count} tickets | Breach: ${t.rate}%')" title="Click to see tickets for ${t.team}">
                 <td>${t.team}</td>
                 <td style="color:#60a5fa;font-weight:600">${t.count.toLocaleString()}</td>
                 <td style="color:#f87171;font-weight:600">${t.rate}%</td>
@@ -1406,7 +1720,7 @@ function updateTemporalTables(data) {
                 }).length;
                 
                 html += `
-                    <tr>
+                    <tr style="cursor:pointer" onclick="openDrilldown(window._ddTmpCache['${reason.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;')}_${service.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;')}'] || [], '${reason.replace(/'/g,"\\'")} — ${service.replace(/'/g,"\\'")}', '${serviceData.length} tickets | Breached: ${breached} | Met: ${met}')" title="Click to view tickets">
                         <td>${reason}</td>
                         <td>${service}</td>
                         <td><span class="badge breached">${breached}</span></td>
@@ -1414,6 +1728,8 @@ function updateTemporalTables(data) {
                         <td style="font-weight:600">${serviceData.length}</td>
                     </tr>
                 `;
+                window._ddTmpCache = window._ddTmpCache || {};
+                window._ddTmpCache[`${reason}_${service}`] = serviceData;
             });
         });
         
