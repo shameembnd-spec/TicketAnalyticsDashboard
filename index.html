@@ -758,7 +758,8 @@ function detectColumns(data) {
         company: find(['company', 'company name', 'customer', 'customer name', 'organization', 'org name']),
         breachException: find(['breach exception']),
         productName: find(['product name', 'product']),
-        productTier3: find(['product categorization tier 3', 'product cat tier 3'])
+        productTier3: find(['product categorization tier 3', 'product cat tier 3']),
+        totalTimeOnHold: find(['total time on hold', 'time on hold', 'hold time', 'to_pendingtime'])
     };
     
     console.log('📊 Column mapping result:', mapping);
@@ -766,16 +767,49 @@ function detectColumns(data) {
     return mapping;
 }
 
+function detectHoldTimeUnit(data, mappings) {
+    // Auto-detect if Total Time On Hold is in minutes or seconds
+    // by comparing sample values against realistic hold durations
+    if (!mappings.totalTimeOnHold) return 'minutes'; // default
+    
+    let sampleValues = [];
+    for (let i = 0; i < Math.min(50, data.length); i++) {
+        const val = parseFloat(data[i][mappings.totalTimeOnHold]);
+        if (!isNaN(val) && val > 0) sampleValues.push(val);
+    }
+    
+    if (sampleValues.length === 0) return 'minutes';
+    
+    const avgVal = sampleValues.reduce((a, b) => a + b, 0) / sampleValues.length;
+    
+    // If avg value in minutes gives > 200 days average hold, likely seconds
+    // If avg value in seconds gives < 1 minute hold, likely minutes
+    const avgAsMinutes = avgVal / 60; // hours
+    const avgAsSeconds = avgVal / 3600; // hours
+    
+    // Heuristic: if avg as minutes > 720 hours (30 days), it's probably seconds
+    if (avgAsMinutes > 720) {
+        console.log(`🕐 Hold time unit: SECONDS (avg ${avgAsSeconds.toFixed(1)} hours as seconds)`);
+        return 'seconds';
+    }
+    
+    console.log(`🕐 Hold time unit: MINUTES (avg ${avgAsMinutes.toFixed(1)} hours as minutes)`);
+    return 'minutes';
+}
+
 function enrichData(data, mappings) {
     console.log('💾 Enriching data...');
     console.log(`📋 Total rows to process: ${data.length}`);
     console.log(`📅 Submit Date column: ${mappings.submitDate || 'NOT FOUND'}`);
     console.log(`📅 Resolved Date column: ${mappings.resolvedDate || 'NOT FOUND'}`);
-    console.log(`⏰ Age column: ${mappings.age || 'NOT FOUND'}`);
+    console.log(`⏸️  Total Time On Hold column: ${mappings.totalTimeOnHold || 'NOT FOUND'}`);
+    
+    // Auto-detect hold time unit
+    const holdTimeUnit = detectHoldTimeUnit(data, mappings);
     
     let dateParseSuccessCount = 0;
     let dateParseFailCount = 0;
-    let businessDaysUsed = 0;
+    let holdTimeUsedCount = 0;
     
     const enriched = data.map((row, index) => {
         const result = {...row};
@@ -790,31 +824,42 @@ function enrichData(data, mappings) {
                 const resolvedDate = mappings.resolvedDate && row[mappings.resolvedDate] 
                     ? parseDate(row[mappings.resolvedDate]) 
                     : null;
-                
                 result._resolvedDate = resolvedDate;
                 
                 // Calculate age in BUSINESS DAYS (exclude weekends)
-                result._calculatedAge = calcBusinessAge(row[mappings.submitDate], resolvedDate);
-                result._ageToUse = result._calculatedAge;
-                businessDaysUsed++;
+                const rawBusinessAge = calcBusinessAge(row[mappings.submitDate], resolvedDate);
                 
-                // Log first 3 successful parses
-                if (dateParseSuccessCount <= 3) {
-                    console.log(`✅ Row ${index + 1}: Date parsed successfully`);
-                    console.log(`   Submit date: ${result._submitDate.toISOString()}`);
-                    if (resolvedDate) {
-                        console.log(`   Resolved date: ${resolvedDate.toISOString()}`);
+                // Subtract Total Time On Hold if available
+                let holdTimeHours = 0;
+                if (mappings.totalTimeOnHold && row[mappings.totalTimeOnHold]) {
+                    const holdRaw = parseFloat(row[mappings.totalTimeOnHold]);
+                    if (!isNaN(holdRaw) && holdRaw > 0) {
+                        holdTimeHours = holdTimeUnit === 'seconds' 
+                            ? holdRaw / 3600   // seconds → hours
+                            : holdRaw / 60;    // minutes → hours
+                        holdTimeUsedCount++;
                     }
-                    console.log(`   Age (business days): ${result._ageToUse} hours`);
+                }
+                
+                // Net SLA Age = Business Days Age - Hold Time
+                result._holdTimeHours = holdTimeHours;
+                result._rawBusinessAge = rawBusinessAge;
+                result._calculatedAge = Math.max(0, rawBusinessAge - holdTimeHours);
+                result._ageToUse = result._calculatedAge;
+                
+                // Log first 3 rows
+                if (dateParseSuccessCount <= 3) {
+                    console.log(`✅ Row ${index + 1}:`);
+                    console.log(`   Submit: ${result._submitDate.toISOString().split('T')[0]}`);
+                    console.log(`   Business Days Age: ${(rawBusinessAge/24).toFixed(1)} days`);
+                    console.log(`   Hold Time: ${holdTimeHours.toFixed(1)} hours (${(holdTimeHours/24).toFixed(1)} days)`);
+                    console.log(`   Net SLA Age: ${(result._ageToUse/24).toFixed(1)} days`);
                 }
             } else {
                 dateParseFailCount++;
                 result._ageToUse = 0;
-                
-                // Log first 3 failures
                 if (dateParseFailCount <= 3) {
-                    console.warn(`⚠️ Row ${index + 1}: Date parse failed`);
-                    console.warn(`   Raw date value: ${row[mappings.submitDate]}`);
+                    console.warn(`⚠️ Row ${index + 1}: Date parse failed - "${row[mappings.submitDate]}"`);
                 }
             }
         } else if (mappings.age && row[mappings.age]) {
@@ -830,23 +875,20 @@ function enrichData(data, mappings) {
         return result;
     });
     
-    console.log(`✅ Date parsing summary:`);
-    console.log(`   Success: ${dateParseSuccessCount}/${data.length}`);
-    console.log(`   Failed: ${dateParseFailCount}/${data.length}`);
-    console.log(`   Using business days: ${businessDaysUsed}/${data.length}`);
+    console.log(`\n✅ Processing Summary:`);
+    console.log(`   Dates parsed: ${dateParseSuccessCount}/${data.length}`);
+    console.log(`   Dates failed: ${dateParseFailCount}/${data.length}`);
+    console.log(`   Hold time applied: ${holdTimeUsedCount}/${data.length}`);
     
-    // Count SLA statuses
-    const slaStatusCount = {};
-    enriched.forEach(row => {
-        const status = row._calculatedSLA || 'Unknown';
-        slaStatusCount[status] = (slaStatusCount[status] || 0) + 1;
+    // SLA status distribution
+    const slaCount = {};
+    enriched.forEach(r => {
+        const s = r._calculatedSLA || 'Unknown';
+        slaCount[s] = (slaCount[s] || 0) + 1;
     });
-    
-    console.log(`📊 SLA Status Summary:`);
-    Object.keys(slaStatusCount).forEach(status => {
-        const count = slaStatusCount[status];
-        const percent = ((count / data.length) * 100).toFixed(1);
-        console.log(`   ${status}: ${count} (${percent}%)`);
+    console.log(`\n📊 SLA Status Distribution:`);
+    Object.entries(slaCount).forEach(([s, c]) => {
+        console.log(`   ${s}: ${c} (${((c/data.length)*100).toFixed(1)}%)`);
     });
     
     return enriched;
