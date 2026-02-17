@@ -545,23 +545,35 @@ function calcAge(dateValue) {
 }
 
 function calcBusinessDays(startDate, endDate) {
-    // Calculate business days (exclude weekends)
+    // Optimized business days calculation (fast even for old tickets)
     if (!startDate || !endDate) return 0;
     
-    let count = 0;
-    let current = new Date(startDate);
+    const start = new Date(startDate);
     const end = new Date(endDate);
     
-    while (current <= end) {
-        const dayOfWeek = current.getDay();
+    if (start > end) return 0;
+    
+    const millisecondsPerDay = 24 * 60 * 60 * 1000;
+    const totalDays = Math.floor((end - start) / millisecondsPerDay);
+    
+    // Calculate full weeks
+    const fullWeeks = Math.floor(totalDays / 7);
+    const remainingDays = totalDays % 7;
+    
+    // Each full week has 5 business days
+    let businessDays = fullWeeks * 5;
+    
+    // Count remaining days
+    const startDayOfWeek = start.getDay();
+    for (let i = 0; i < remainingDays; i++) {
+        const currentDay = (startDayOfWeek + i) % 7;
         // 0 = Sunday, 6 = Saturday
-        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-            count++;
+        if (currentDay !== 0 && currentDay !== 6) {
+            businessDays++;
         }
-        current.setDate(current.getDate() + 1);
     }
     
-    return count * 24; // Return hours (business days * 24 hours)
+    return businessDays * 24; // Return hours (business days * 24)
 }
 
 function calcBusinessAge(dateValue, resolvedDate) {
@@ -615,8 +627,8 @@ function calculateSLA(row) {
         const statusReason = String(row[columnMappings.statusReason]).toLowerCase().trim();
         isPaused = pauseStatuses.some(pause => statusReason.includes(pause));
         
-        if (isPaused) {
-            console.log(`⏸️ Ticket paused: Status Reason = "${row[columnMappings.statusReason]}"`);
+        if (isPaused && Math.random() < 0.01) { // Log 1% of paused tickets
+            console.log(`⏸️ PAUSED: Status="${row[columnMappings.statusReason]}" → SLA MET`);
         }
     }
     
@@ -625,6 +637,9 @@ function calculateSLA(row) {
         const exception = String(row[columnMappings.breachException]).toUpperCase();
         if (exception === 'YES') {
             isPaused = true;
+            if (Math.random() < 0.01) { // Log 1% of exceptions
+                console.log(`⏸️ EXCEPTION: Breach Exception=YES → SLA MET`);
+            }
         }
     }
     
@@ -676,6 +691,11 @@ function calculateSLA(row) {
     // Method E: Default fallback
     if (!slaTarget) {
         slaTarget = 48; // Default 48 hours
+    }
+    
+    // Debug log for first few tickets
+    if (Math.random() < 0.005) { // Log 0.5% of tickets
+        console.log(`🎯 SLA Check: Age=${(ageHours/24).toFixed(1)}d, Target=${(slaTarget/24).toFixed(1)}d, Priority=${priority}`);
     }
     
     // Step 4: Compare age vs target
@@ -814,6 +834,20 @@ function enrichData(data, mappings) {
     console.log(`   Success: ${dateParseSuccessCount}/${data.length}`);
     console.log(`   Failed: ${dateParseFailCount}/${data.length}`);
     console.log(`   Using business days: ${businessDaysUsed}/${data.length}`);
+    
+    // Count SLA statuses
+    const slaStatusCount = {};
+    enriched.forEach(row => {
+        const status = row._calculatedSLA || 'Unknown';
+        slaStatusCount[status] = (slaStatusCount[status] || 0) + 1;
+    });
+    
+    console.log(`📊 SLA Status Summary:`);
+    Object.keys(slaStatusCount).forEach(status => {
+        const count = slaStatusCount[status];
+        const percent = ((count / data.length) * 100).toFixed(1);
+        console.log(`   ${status}: ${count} (${percent}%)`);
+    });
     
     return enriched;
 }
