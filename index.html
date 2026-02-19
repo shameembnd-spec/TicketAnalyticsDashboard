@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <title>IOT SLA Dashboard v2.1 (2026-02-20)</title>
+    <title>IOT SLA Dashboard v2.3 (2026-02-20)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -218,8 +218,8 @@
 </div>
     <div class="container">
         <div class="header">
-            <h1>📊 Ticket Analytics Dashboard <span style="font-size:0.5em;color:#60a5fa;font-weight:400">v2.1</span></h1>
-            <div class="subtitle">🎨 Drag & Drop • Multi-Color Charts • Compact Overview • <span style="color:#34d399">✓ Filters Fixed</span></div>
+            <h1>📊 Ticket Analytics Dashboard <span style="font-size:0.5em;color:#60a5fa;font-weight:400">v2.3</span></h1>
+            <div class="subtitle">🎨 Drag & Drop • Multi-Color Charts • Compact Overview • <span style="color:#34d399">✓ Header Detection</span></div>
         </div>
         
         <div class="upload-section" id="uploadSection">
@@ -324,10 +324,10 @@
     </div>
     
     <script>
-// IOT SLA Dashboard v2.1 - Build 2026-02-20-1500
-// Last Update: Fixed SLA filter dropdown, added debug features
-console.log('📊 IOT SLA Dashboard v2.1 loaded');
-console.log('🔧 Changes: SLA filter fix, Debug button, Enhanced error messages');
+// IOT SLA Dashboard v2.3 - Build 2026-02-20-1700
+// Last Update: Fixed header row detection and empty row filtering
+console.log('📊 IOT SLA Dashboard v2.3 loaded');
+console.log('🔧 Changes: Robust header detection, skips title/empty rows, counts only actual tickets');
 
 let chartInstances = {};
 let ticketData = null;
@@ -1137,36 +1137,60 @@ function handleFile() {
             
             console.log('📊 File loaded:', file.name);
             
-            // Check if this is a ROXANNE file with malformed structure
-            let rawData = XLSX.utils.sheet_to_json(firstSheet, { raw: false, defval: '' });
-            const firstRowKeys = Object.keys(rawData[0] || {});
-            const hasEmptyColumns = firstRowKeys.some(k => k.includes('__EMPTY'));
+            // ROBUST PARSING: Always parse as array of arrays first
+            const allRows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, raw: false, defval: '' });
+            console.log(`📋 Total rows in sheet: ${allRows.length}`);
             
-            console.log('📋 First attempt - Total rows:', rawData.length);
-            console.log('📑 First row keys:', firstRowKeys);
+            if (allRows.length === 0) throw new Error('File is empty');
             
-            // If we have __EMPTY__ columns, this is a ROXANNE file - use row 2 as headers
-            if (hasEmptyColumns || (firstRowKeys.length > 0 && firstRowKeys[0].includes('ROXANNE'))) {
-                console.log('🔄 Detected ROXANNE format - reprocessing with row 2 as headers...');
+            // Find the header row (contains "Incident" column)
+            let headerRowIndex = -1;
+            let headers = null;
+            
+            console.log('🔍 Searching for header row...');
+            for (let i = 0; i < Math.min(10, allRows.length); i++) {
+                const row = allRows[i];
+                console.log(`   Row ${i}: ${row.slice(0, 5)}`);
                 
-                // Parse without headers first
-                const allRows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, raw: false, defval: '' });
-                console.log('📊 Raw rows:', allRows.length);
-                console.log('📑 Row 1 (title):', allRows[0]);
-                console.log('📑 Row 2 (headers):', allRows[1]);
-                console.log('📑 Row 3 (first data):', allRows[2]);
+                // Check if this row contains column headers
+                const hasIncident = row.some(cell => {
+                    if (!cell) return false;
+                    const cellStr = String(cell).toLowerCase();
+                    return cellStr.includes('incident') && (cellStr.includes('id') || cellStr.includes('number'));
+                });
                 
-                if (allRows.length < 3) {
-                    throw new Error('ROXANNE file has insufficient rows');
+                if (hasIncident) {
+                    headerRowIndex = i;
+                    headers = row;
+                    console.log(`✅ Found header row at index ${i}`);
+                    console.log(`✅ Headers: ${headers.slice(0, 8)}`);
+                    break;
                 }
-                
-                // Row 2 should be the headers
-                const headers = allRows[1];
-                // Rows 3+ are the data
-                const dataRows = allRows.slice(2);
-                
-                // Convert to objects using row 2 as headers
-                rawData = dataRows.map(row => {
+            }
+            
+            if (headerRowIndex === -1) {
+                // Fallback: assume first row is headers
+                console.log('⚠️ No header row found, assuming row 0 is headers');
+                headerRowIndex = 0;
+                headers = allRows[0];
+            }
+            
+            // Get data rows (everything after header)
+            const dataRows = allRows.slice(headerRowIndex + 1);
+            console.log(`📊 Data rows (after header): ${dataRows.length}`);
+            
+            // Find incident column index to filter empty rows
+            const incidentColIndex = headers.findIndex(h => {
+                if (!h) return false;
+                const hs = String(h).toLowerCase();
+                return hs.includes('incident') && (hs.includes('id') || hs.includes('number'));
+            });
+            
+            console.log(`📌 Incident column at index: ${incidentColIndex}`);
+            
+            // Convert to objects and filter out rows without incident IDs
+            let rawData = dataRows
+                .map(row => {
                     const obj = {};
                     headers.forEach((header, index) => {
                         if (header && header !== '') {
@@ -1174,15 +1198,28 @@ function handleFile() {
                         }
                     });
                     return obj;
-                }).filter(obj => Object.keys(obj).length > 0);
-                
-                console.log('✅ ROXANNE reprocessed - Data rows:', rawData.length);
-                console.log('✅ Sample reprocessed row:', rawData[0]);
-            }
+                })
+                .filter(obj => {
+                    // Must have at least one key
+                    if (Object.keys(obj).length === 0) return false;
+                    
+                    // If we found incident column, check it has a value
+                    if (incidentColIndex >= 0) {
+                        const incidentKey = headers[incidentColIndex];
+                        const incidentVal = obj[incidentKey];
+                        // Filter out if incident ID is empty/null/whitespace
+                        if (!incidentVal || String(incidentVal).trim() === '') {
+                            return false;
+                        }
+                    }
+                    
+                    return true;
+                });
             
-            console.log('📋 Final row count:', rawData.length);
+            console.log(`✅ Valid tickets (with incident IDs): ${rawData.length}`);
+            console.log(`✅ Sample ticket:`, rawData[0]);
             
-            if (rawData.length === 0) throw new Error('No data found in file');
+            if (rawData.length === 0) throw new Error('No valid ticket data found in file (no rows with incident IDs)');
             
             console.log('🔍 Detecting columns...');
             columnMappings = detectColumns(rawData);
@@ -1441,7 +1478,11 @@ function processData(data) {
         if (!field) return {};
         const counts = {};
         data.forEach(row => {
-            const val = row[field] !== null && row[field] !== undefined ? String(row[field]).trim() : 'Unknown';
+            let val = row[field] !== null && row[field] !== undefined ? String(row[field]).trim() : '';
+            // Replace empty/blank values with meaningful labels
+            if (!val || val === '') {
+                val = '(No Value)';
+            }
             counts[val] = (counts[val] || 0) + 1;
         });
         return counts;
@@ -1546,9 +1587,15 @@ function updateServiceHealth(data, svc) {
         const svcRows = data.filter(r => String(r[columnMappings.service] || '').trim() === s.service);
         window._serviceTicketCache[s.service] = svcRows;
         const eid = 'svc_' + s.service.replace(/[^a-z0-9]/gi,'_');
+        
+        // Add warning icon for missing service names
+        const displayName = s.service === '(No Value)' 
+            ? `<span style="color:#fb923c">⚠️ ${s.service}</span>` 
+            : s.service;
+        
         html += `
             <div class="metric-item" id="${eid}" style="cursor:pointer" onclick="openDrilldown(window._serviceTicketCache['${s.service.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}'], '${s.service.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}', '${s.count} tickets • Breach rate: ${s.rate}%')">
-                <div class="metric-item-label">${s.service}</div>
+                <div class="metric-item-label">${displayName}</div>
                 <div class="metric-item-value">${s.count.toLocaleString()}</div>
                 <div style="margin-top:8px">
                     <span class="health-badge ${s.healthClass}">${s.icon} ${s.health}</span>
@@ -1691,15 +1738,19 @@ function updateServicesTable(data, serviceCounts) {
         services.forEach(s => {
             window._serviceTableCache[s.service] = data.filter(r => String(r[columnMappings.service] || '').trim() === s.service);
         });
-        tbody.innerHTML = services.map(s => `
+        tbody.innerHTML = services.map(s => {
+            const displayName = s.service === '(No Value)' 
+                ? `<span style="color:#fb923c">⚠️ ${s.service}</span>` 
+                : s.service;
+            return `
             <tr style="cursor:pointer" onclick="openDrilldown(window._serviceTableCache['${s.service.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}'], '${s.service.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}', '${s.count} tickets | Breach: ${s.rate}%')" title="Click to see tickets for ${s.service}">
-                <td>${s.service}</td>
+                <td>${displayName}</td>
                 <td style="color:#60a5fa;font-weight:600">${s.count.toLocaleString()}</td>
                 <td style="color:#fb923c;font-weight:600">${s.pct}%</td>
                 <td style="color:#f87171;font-weight:600">${s.rate}%</td>
                 <td>${s.badge}</td>
             </tr>
-        `).join('');
+        `}).join('');
     }
 }
 
