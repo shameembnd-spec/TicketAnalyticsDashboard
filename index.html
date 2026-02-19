@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <title>IOT SLA Dashboard v2.3 (2026-02-20)</title>
+    <title>IOT SLA Dashboard v2.4 - CEO Edition (2026-02-20)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -218,8 +218,8 @@
 </div>
     <div class="container">
         <div class="header">
-            <h1>📊 Ticket Analytics Dashboard <span style="font-size:0.5em;color:#60a5fa;font-weight:400">v2.3</span></h1>
-            <div class="subtitle">🎨 Drag & Drop • Multi-Color Charts • Compact Overview • <span style="color:#34d399">✓ Header Detection</span></div>
+            <h1>📊 Ticket Analytics Dashboard <span style="font-size:0.5em;color:#60a5fa;font-weight:400">v2.4 CEO Edition</span></h1>
+            <div class="subtitle">🎨 Drag & Drop • Multi-Color Charts • <span style="color:#fbbf24">🎯 CEO-Grade Precision</span> • <span style="color:#34d399">✓ Exact Counts</span></div>
         </div>
         
         <div class="upload-section" id="uploadSection">
@@ -324,10 +324,10 @@
     </div>
     
     <script>
-// IOT SLA Dashboard v2.3 - Build 2026-02-20-1700
-// Last Update: Fixed header row detection and empty row filtering
-console.log('📊 IOT SLA Dashboard v2.3 loaded');
-console.log('🔧 Changes: Robust header detection, skips title/empty rows, counts only actual tickets');
+// IOT SLA Dashboard v2.4 - Build 2026-02-20-1800 - CEO PRECISION
+// Last Update: Ultra-strict row filtering - excludes headers, empty rows, junk rows
+console.log('📊 IOT SLA Dashboard v2.4 loaded');
+console.log('🎯 CEO PRECISION MODE: Excludes header rows, requires real data in multiple fields');
 
 let chartInstances = {};
 let ticketData = null;
@@ -1203,12 +1203,31 @@ function handleFile() {
                     // Must have at least one key
                     if (Object.keys(obj).length === 0) return false;
                     
-                    // If we found incident column, check it has a value
+                    // If we found incident column, check it has a REAL value
                     if (incidentColIndex >= 0) {
                         const incidentKey = headers[incidentColIndex];
                         const incidentVal = obj[incidentKey];
+                        
                         // Filter out if incident ID is empty/null/whitespace
                         if (!incidentVal || String(incidentVal).trim() === '') {
+                            return false;
+                        }
+                        
+                        // CRITICAL: Filter out if it's the header value itself (case-insensitive)
+                        const incidentStr = String(incidentVal).trim().toLowerCase();
+                        if (incidentStr.includes('incident') && (incidentStr.includes('id') || incidentStr.includes('number'))) {
+                            console.log(`⚠️ Filtering out header-like value: "${incidentVal}"`);
+                            return false;
+                        }
+                        
+                        // Filter out if ALL other fields are empty (likely a junk row)
+                        const otherValues = Object.entries(obj)
+                            .filter(([key]) => key !== incidentKey)
+                            .map(([, val]) => val);
+                        const hasOtherData = otherValues.some(v => v && String(v).trim() !== '');
+                        
+                        if (!hasOtherData) {
+                            console.log(`⚠️ Filtering out row with incident "${incidentVal}" but no other data`);
                             return false;
                         }
                     }
@@ -1216,7 +1235,11 @@ function handleFile() {
                     return true;
                 });
             
+            const beforeFilter = dataRows.length;
+            console.log(`📊 Filtering ${beforeFilter} data rows...`);
+            
             console.log(`✅ Valid tickets (with incident IDs): ${rawData.length}`);
+            console.log(`   Filtered out: ${beforeFilter - rawData.length} rows`);
             console.log(`✅ Sample ticket:`, rawData[0]);
             
             if (rawData.length === 0) throw new Error('No valid ticket data found in file (no rows with incident IDs)');
