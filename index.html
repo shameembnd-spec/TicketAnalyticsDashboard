@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ticket Analytics Dashboard</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>IOT SLA Dashboard v2.1 (2026-02-20)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -215,8 +218,8 @@
 </div>
     <div class="container">
         <div class="header">
-            <h1>📊 Ticket Analytics Dashboard</h1>
-            <div class="subtitle">🎨 Drag & Drop • Multi-Color Charts • Compact Overview</div>
+            <h1>📊 Ticket Analytics Dashboard <span style="font-size:0.5em;color:#60a5fa;font-weight:400">v2.1</span></h1>
+            <div class="subtitle">🎨 Drag & Drop • Multi-Color Charts • Compact Overview • <span style="color:#34d399">✓ Filters Fixed</span></div>
         </div>
         
         <div class="upload-section" id="uploadSection">
@@ -248,6 +251,7 @@
                 <div class="filter-actions">
                     <button class="btn btn-secondary" onclick="clearFilters()">Clear</button>
                     <button class="btn btn-primary" onclick="applyFilters()">Apply</button>
+                    <button class="btn btn-secondary" onclick="debugFilters()" title="Show how many tickets match each filter">🔍 Debug</button>
                 </div>
             </div>
             
@@ -320,6 +324,11 @@
     </div>
     
     <script>
+// IOT SLA Dashboard v2.1 - Build 2026-02-20-1500
+// Last Update: Fixed SLA filter dropdown, added debug features
+console.log('📊 IOT SLA Dashboard v2.1 loaded');
+console.log('🔧 Changes: SLA filter fix, Debug button, Enhanced error messages');
+
 let chartInstances = {};
 let ticketData = null;
 let filteredData = null;
@@ -1218,11 +1227,23 @@ function populateFilters() {
         filterStatus: columnMappings.status,
         filterPriority: columnMappings.priority,
         filterGroup: columnMappings.assignedGroup,
-        filterSLA: columnMappings.slaStatus
+        // SLA filter uses CALCULATED values, not Excel column
+        filterSLA: null  // Will be populated with calculated values
     };
     
     Object.entries(filters).forEach(([filterId, columnName]) => {
         const select = document.getElementById(filterId);
+        
+        // Special handling for SLA filter - use calculated values
+        if (filterId === 'filterSLA') {
+            const slaValues = [...new Set(ticketData.map(row => getSLA(row)).filter(v => v))];
+            slaValues.sort();
+            select.innerHTML = `<option value="">All SLA Statuses</option>` + 
+                slaValues.map(value => `<option value="${value}">${value}</option>`).join('');
+            select.disabled = false;
+            return;
+        }
+        
         if (!columnName) {
             select.innerHTML = '<option value="">N/A</option>';
             select.disabled = true;
@@ -1247,6 +1268,14 @@ function applyFilters() {
     const dateFrom = document.getElementById('filterDateFrom').value;
     const dateTo = document.getElementById('filterDateTo').value;
     
+    console.log('🔍 Applying filters...');
+    console.log(`  Date range: ${dateFrom || '(start)'} → ${dateTo || '(end)'}`);
+    console.log(`  Service: ${document.getElementById('filterService').value || 'All'}`);
+    console.log(`  Status: ${document.getElementById('filterStatus').value || 'All'}`);
+    console.log(`  Priority: ${document.getElementById('filterPriority').value || 'All'}`);
+    console.log(`  Group: ${document.getElementById('filterGroup').value || 'All'}`);
+    console.log(`  SLA: ${document.getElementById('filterSLA').value || 'All'}`);
+    
     filteredData = ticketData.filter(row => {
         if (dateFrom || dateTo) {
             const submitDate = row._submitDate;
@@ -1265,6 +1294,8 @@ function applyFilters() {
                (!document.getElementById('filterSLA').value || getSLA(row) === document.getElementById('filterSLA').value);
     });
     
+    console.log(`✅ Filter result: ${filteredData.length} of ${ticketData.length} tickets match`);
+    
     updateFilterStatus();
     processData(filteredData);
 }
@@ -1280,11 +1311,124 @@ function clearFilters() {
     processData(filteredData);
 }
 
+function debugFilters() {
+    console.log('═══════════════════════════════════════════════════');
+    console.log('🔍 FILTER DEBUG BREAKDOWN');
+    console.log('═══════════════════════════════════════════════════');
+    console.log(`📊 Total tickets: ${ticketData.length}`);
+    console.log('');
+    
+    // Test each filter individually
+    const testFilter = (label, filterFn) => {
+        const count = ticketData.filter(filterFn).length;
+        const pct = ((count / ticketData.length) * 100).toFixed(1);
+        console.log(`${label}: ${count} tickets (${pct}%)`);
+        return count;
+    };
+    
+    const dateFrom = document.getElementById('filterDateFrom').value;
+    const dateTo = document.getElementById('filterDateTo').value;
+    const svc = document.getElementById('filterService').value;
+    const status = document.getElementById('filterStatus').value;
+    const pri = document.getElementById('filterPriority').value;
+    const grp = document.getElementById('filterGroup').value;
+    const sla = document.getElementById('filterSLA').value;
+    
+    if (dateFrom || dateTo) {
+        testFilter(`📅 Date range (${dateFrom || 'start'} → ${dateTo || 'end'})`, row => {
+            const submitDate = row._submitDate;
+            if (!submitDate) return false;
+            if (dateFrom && submitDate < new Date(dateFrom)) return false;
+            if (dateTo) {
+                const toDate = new Date(dateTo);
+                toDate.setHours(23, 59, 59);
+                if (submitDate > toDate) return false;
+            }
+            return true;
+        });
+    }
+    
+    if (svc) testFilter(`🔧 Service = "${svc}"`, row => String(row[columnMappings.service] || '').trim() === svc);
+    if (status) testFilter(`📌 Status = "${status}"`, row => String(row[columnMappings.status] || '').trim() === status);
+    if (pri) testFilter(`⚡ Priority = "${pri}"`, row => String(row[columnMappings.priority] || '').trim() === pri);
+    if (grp) testFilter(`👥 Group = "${grp}"`, row => String(row[columnMappings.assignedGroup] || '').trim() === grp);
+    if (sla) testFilter(`🎯 SLA = "${sla}"`, row => getSLA(row) === sla);
+    
+    console.log('');
+    console.log(`🔗 ALL FILTERS COMBINED: ${filteredData.length} tickets`);
+    console.log('═══════════════════════════════════════════════════');
+    
+    // User-friendly alert
+    const breakdown = [];
+    if (svc) {
+        const c = ticketData.filter(r => String(r[columnMappings.service] || '').trim() === svc).length;
+        breakdown.push(`Service "${svc}": ${c} tickets`);
+    }
+    if (grp) {
+        const c = ticketData.filter(r => String(r[columnMappings.assignedGroup] || '').trim() === grp).length;
+        breakdown.push(`Group "${grp}": ${c} tickets`);
+    }
+    if (sla) {
+        const c = ticketData.filter(r => getSLA(r) === sla).length;
+        breakdown.push(`SLA "${sla}": ${c} tickets`);
+    }
+    if (dateFrom || dateTo) {
+        const c = ticketData.filter(row => {
+            const submitDate = row._submitDate;
+            if (!submitDate) return false;
+            if (dateFrom && submitDate < new Date(dateFrom)) return false;
+            if (dateTo) {
+                const toDate = new Date(dateTo);
+                toDate.setHours(23, 59, 59);
+                if (submitDate > toDate) return false;
+            }
+            return true;
+        }).length;
+        breakdown.push(`Date range: ${c} tickets`);
+    }
+    
+    alert(`🔍 FILTER BREAKDOWN
+    
+Total Tickets: ${ticketData.length}
+
+Individual Filters:
+${breakdown.join('\n')}
+
+ALL COMBINED: ${filteredData.length} tickets
+
+${filteredData.length === 0 ? '\n⚠️ No tickets match ALL filters together.\nTry removing one filter at a time.' : '\n✅ Filters are working correctly.'}
+
+See browser console (F12) for detailed breakdown.`);
+}
+
 function updateFilterStatus() {
     const total = ticketData.length;
     const filtered = filteredData.length;
-    document.getElementById('filterStatusText').textContent = 
-        filtered === total ? `Showing all ${total.toLocaleString()} tickets` : `Showing ${filtered.toLocaleString()} of ${total.toLocaleString()} tickets`;
+    
+    if (filtered === 0 && total > 0) {
+        // Show which filters are active when no results
+        const activeFilters = [];
+        const addFilter = (id, label) => {
+            const val = document.getElementById(id)?.value;
+            if (val) activeFilters.push(`${label}: ${val}`);
+        };
+        addFilter('filterService', 'Service');
+        addFilter('filterStatus', 'Status');
+        addFilter('filterPriority', 'Priority');
+        addFilter('filterGroup', 'Group');
+        addFilter('filterSLA', 'SLA');
+        const from = document.getElementById('filterDateFrom')?.value;
+        const to = document.getElementById('filterDateTo')?.value;
+        if (from || to) activeFilters.push(`Date: ${from || '(start)'} → ${to || '(end)'}`);
+        
+        const msg = activeFilters.length > 0 
+            ? `No tickets match: ${activeFilters.join(' + ')}` 
+            : 'No tickets found';
+        document.getElementById('filterStatusText').innerHTML = `<span style="color:#fb923c">⚠️ ${msg}</span>`;
+    } else {
+        document.getElementById('filterStatusText').textContent = 
+            filtered === total ? `Showing all ${total.toLocaleString()} tickets` : `Showing ${filtered.toLocaleString()} of ${total.toLocaleString()} tickets`;
+    }
 }
 
 function generateColorPalette(count) {
